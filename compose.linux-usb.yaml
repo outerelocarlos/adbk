@@ -1,0 +1,24 @@
+# Optional Linux-only override for DIRECT USB access (no host ADB server).
+#
+# Use ONLY on Linux with Docker Engine, and only if you understand the trade-off:
+# the container gets access to your USB bus. This is not the normal solution and
+# does not apply to Docker Desktop on Windows or macOS.
+#
+#   docker compose -f compose.yaml -f compose.linux-usb.yaml run --rm adbk doctor
+#
+# The container then runs its own ADB server and talks to the phone over USB, so
+# the host ADB-server settings are cleared here. If your user cannot access the
+# device, you may need to add the container to a group that can (for example via
+# `group_add`) or fix host udev rules - grant only the access you actually need
+# and avoid running the container privileged.
+
+services:
+  adbk:
+    # Clear the host ADB-server configuration for direct-USB mode.
+    environment:
+      ADBK_ADB_SERVER_HOST: ""
+      ADBK_ADB_SERVER_PORT: ""
+      ADB_SERVER_SOCKET: ""
+    extra_hosts: []
+    devices:
+      - "/dev/bus/usb:/dev/bus/usb"

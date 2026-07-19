@@ -1,0 +1,48 @@
+# Cross-platform container setup.
+#
+# The recommended, portable mode runs the ADB server on the HOST and lets the
+# container connect to it over TCP. On the host, start a server the container
+# can reach, for example:
+#
+#   adb -a -P 5037 nodaemon server         # listens for the current session
+#
+# and stop it afterwards with `adb kill-server`. Do not expose ADB to your whole
+# network; keep it reachable only by the Docker environment.
+#
+# Usage:
+#   docker compose run --rm adbk                 # run the app
+#   docker compose run --rm adbk --dry-run       # pass CLI options
+#   docker compose run --rm adbk-dev pytest      # run tests
+#   docker compose run --rm adbk-dev ruff check .
+#   docker compose run --rm adbk-dev mypy adbk
+
+services:
+  adbk:
+    build: .
+    image: adbk:latest
+    # Reach the host's ADB server. host.docker.internal works on Docker Desktop
+    # (Windows/macOS); on Linux the extra_hosts entry below maps it too.
+    environment:
+      ADBK_ADB_SERVER_HOST: ${ADBK_ADB_SERVER_HOST:-host.docker.internal}
+      ADBK_ADB_SERVER_PORT: ${ADBK_ADB_SERVER_PORT:-5037}
+      ADB_SERVER_SOCKET: tcp:${ADBK_ADB_SERVER_HOST:-host.docker.internal}:${ADBK_ADB_SERVER_PORT:-5037}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Backups are stored on the host, never only inside the container.
+    volumes:
+      - ./backups:/data/backups
+    # Match host ownership on Linux. On Windows/macOS these IDs are ignored by
+    # the Docker file-sharing layer, which is fine.
+    user: "${ADBK_UID:-1000}:${ADBK_GID:-1000}"
+
+  # Same image, but with the source bind-mounted and no fixed entry point, so it
+  # can run any of the development tools.
+  adbk-dev:
+    build: .
+    image: adbk:latest
+    entrypoint: []
+    working_dir: /app
+    environment:
+      ADBK_CONTAINER: "1"
+    volumes:
+      - ./:/app
