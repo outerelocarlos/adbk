@@ -30,7 +30,7 @@ services:
       - "host.docker.internal:host-gateway"
     # Backups are stored on the host, never only inside the container.
     volumes:
-      - ./backups:/data/backups
+      - ./backup:/data/backup
     # Match host ownership on Linux. On Windows/macOS these IDs are ignored by
     # the Docker file-sharing layer, which is fine.
     user: "${ADBK_UID:-1000}:${ADBK_GID:-1000}"

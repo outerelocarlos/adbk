@@ -24,10 +24,9 @@ from adbk.config import AppConfig, effective_categories, load_config
 from adbk.device import AdbDevice, DeviceInterface
 from adbk.doctor import gather, render
 from adbk.errors import AndroidBackupError, DeviceError
-from adbk.manifest import MANIFEST_FILENAME
 from adbk.models import ConflictPolicy, TransferMode
 from adbk.transfer import CancellationToken
-from adbk.workflow import run_backup, run_restore
+from adbk.workflow import find_latest_backup, next_backup_dir, run_backup, run_restore
 
 _CONFLICT_CHOICES: dict[str, ConflictPolicy] = {
     "skip-identical": ConflictPolicy.SKIP_IDENTICAL,
@@ -204,12 +203,12 @@ def _resolve_backup_dir(args: argparse.Namespace, config: AppConfig) -> Path:
 def _default_operation(
     args: argparse.Namespace, config: AppConfig, console: Console, interactive: bool
 ) -> str:
-    """Backup by default; suggest restore when a valid manifest is present."""
+    """Backup by default; suggest restore when a backup is already present."""
 
-    manifest_path = _resolve_backup_dir(args, config) / MANIFEST_FILENAME
+    latest = find_latest_backup(_resolve_backup_dir(args, config))
     # The inferred default is always shown and changeable.
-    if manifest_path.is_file() and interactive and ui.confirm(
-        console, f"A backup manifest exists at {ps.display_path(manifest_path)}. "
+    if latest is not None and interactive and ui.confirm(
+        console, f"A backup exists at {ps.display_path(latest)}. "
         "Restore instead of backing up?", interactive=True, default=False,
     ):
         return "restore"
@@ -242,9 +241,16 @@ def _run_backup(
     console: Console,
     interactive: bool,
 ) -> int:
-    backup_dir = _resolve_backup_dir(args, config)
+    root = _resolve_backup_dir(args, config)
     mode = _resolve_mode(args)
+    resume = bool(getattr(args, "resume", False))
     device = _open_device(options, console, interactive)
+
+    if resume:
+        backup_dir = find_latest_backup(root) or next_backup_dir(root)
+    else:
+        backup_dir = next_backup_dir(root)
+    console.print(f"Backup directory: {ps.display_path(backup_dir)}")
 
     cancel = CancellationToken()
     uninstall = ps.install_interrupt_handler(cancel.request)
@@ -259,7 +265,7 @@ def _run_backup(
             interactive=interactive,
             assume_yes=options.assume_yes,
             cancel=cancel,
-            resume=bool(getattr(args, "resume", False)),
+            resume=resume,
             config_snapshot={"mode": str(mode)},
         )
     finally:
@@ -274,8 +280,22 @@ def _run_restore(
     console: Console,
     interactive: bool,
 ) -> int:
-    backup_dir = _resolve_backup_dir(args, config)
+    root = _resolve_backup_dir(args, config)
     policy = _CONFLICT_CHOICES.get(getattr(args, "conflict", None) or "")
+    manifest_arg = getattr(args, "manifest", None)
+    manifest_path: Path | None
+    if manifest_arg is not None:
+        manifest_path = Path(manifest_arg)
+        backup_dir = manifest_path.parent
+    else:
+        found = find_latest_backup(root)
+        if found is None:
+            raise AndroidBackupError(
+                f"No backup found under {ps.display_path(root)}. "
+                "Pass --backup-dir or --manifest to point at one."
+            )
+        backup_dir = found
+        manifest_path = None
     device = _open_device(options, console, interactive)
 
     cancel = CancellationToken()
@@ -284,7 +304,7 @@ def _run_restore(
         return run_restore(
             device,
             backup_root=backup_dir,
-            manifest_path=getattr(args, "manifest", None),
+            manifest_path=manifest_path,
             policy=policy,
             console=console,
             dry_run=options.dry_run,

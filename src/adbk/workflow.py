@@ -15,6 +15,7 @@ an in-memory fake device.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 from rich.console import Console
@@ -53,6 +54,48 @@ _SKIP_REASONS = {
     AccessState.ROOT_ONLY: "root only",
     AccessState.EMPTY: "empty",
 }
+
+
+# --- Backup directory layout --------------------------------------------------
+#
+# The backup root holds one dated sub-directory per backup, e.g.
+# ``~/backup/2026-07-20/``. A new run gets today's date (with a numeric suffix
+# if that date already holds a backup); restore and resume look up the most
+# recent dated backup under the root.
+
+
+def next_backup_dir(root: Path, *, today: date | None = None) -> Path:
+    """A fresh dated backup directory ``<root>/YYYY-MM-DD`` for a new run.
+
+    Same-day reruns get a numeric suffix (``-2``, ``-3``, ...) so an existing
+    backup is never written into.
+    """
+
+    stamp = (today or date.today()).isoformat()
+    candidate = root / stamp
+    suffix = 2
+    while (candidate / MANIFEST_FILENAME).exists():
+        candidate = root / f"{stamp}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+def find_latest_backup(root: Path) -> Path | None:
+    """The most recent backup under ``root`` (or ``root`` itself if it holds one).
+
+    A directory "holds a backup" when it contains a manifest. Dated
+    sub-directories sort chronologically by name, so the last one is the newest.
+    """
+
+    if (root / MANIFEST_FILENAME).is_file():
+        return root
+    if not root.is_dir():
+        return None
+    dated = sorted(
+        (child for child in root.iterdir() if (child / MANIFEST_FILENAME).is_file()),
+        key=lambda path: path.name,
+    )
+    return dated[-1] if dated else None
 
 
 @dataclass

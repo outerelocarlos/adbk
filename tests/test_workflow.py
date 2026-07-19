@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -198,6 +199,37 @@ def test_restore_requires_confirmation(tmp_path: Path) -> None:
     )
     assert code == 0
     assert not target.files  # nothing written without an explicit "yes"
+
+
+# --- Dated backup directories -------------------------------------------------
+
+
+def _write_manifest(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / MANIFEST_FILENAME).write_text("{}", encoding="utf-8")
+
+
+def test_next_backup_dir_uses_the_date(tmp_path: Path) -> None:
+    assert workflow.next_backup_dir(tmp_path, today=date(2026, 7, 20)) == tmp_path / "2026-07-20"
+
+
+def test_next_backup_dir_disambiguates_same_day(tmp_path: Path) -> None:
+    _write_manifest(tmp_path / "2026-07-20")
+    assert workflow.next_backup_dir(tmp_path, today=date(2026, 7, 20)) == tmp_path / "2026-07-20-2"
+    _write_manifest(tmp_path / "2026-07-20-2")
+    assert workflow.next_backup_dir(tmp_path, today=date(2026, 7, 20)) == tmp_path / "2026-07-20-3"
+
+
+def test_find_latest_backup_picks_newest_dated_dir(tmp_path: Path) -> None:
+    assert workflow.find_latest_backup(tmp_path) is None
+    for day in ("2026-07-18", "2026-07-20", "2026-07-19"):
+        _write_manifest(tmp_path / day)
+    assert workflow.find_latest_backup(tmp_path) == tmp_path / "2026-07-20"
+
+
+def test_find_latest_backup_accepts_a_direct_backup_dir(tmp_path: Path) -> None:
+    _write_manifest(tmp_path)  # the root itself holds a manifest
+    assert workflow.find_latest_backup(tmp_path) == tmp_path
 
 
 def _group(name: str, *sizes: int) -> workflow.RestoreGroup:

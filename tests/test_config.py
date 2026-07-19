@@ -23,7 +23,7 @@ def test_valid_config(tmp_path: Path) -> None:
     path = tmp_path / "backup-config.toml"
     path.write_text(
         '[backup]\n'
-        'destination = "/data/backups"\n'
+        'destination = "/data/backup"\n'
         '[adb]\n'
         'server_host = "host.docker.internal"\n'
         'server_port = 5555\n'
@@ -31,7 +31,7 @@ def test_valid_config(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     loaded = config.load_config(path)
-    assert loaded.backup_dir == Path("/data/backups")
+    assert loaded.backup_dir == Path("/data/backup")
     assert loaded.adb_server_host == "host.docker.internal"
     assert loaded.adb_server_port == 5555
     assert loaded.auto_install_adb is True

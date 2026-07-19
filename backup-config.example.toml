@@ -5,9 +5,10 @@
 # Every value is optional and has a sensible default.
 
 [backup]
-# Where backups are written. If omitted, a per-user default is used
-# (e.g. ~/android-backups, or /data/backups inside the container).
-# destination = "D:/android-backups"      # Windows example
+# Root directory backups are written to. If omitted, a per-user default is used
+# (e.g. ~/backup, or /data/backup inside the container). Each backup lands in a
+# dated sub-directory of this root, e.g. <destination>/2026-07-20/.
+# destination = "D:/backup"               # Windows example
 # destination = "/mnt/backups/android"    # Linux/macOS example
 
 [adb]

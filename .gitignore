@@ -24,6 +24,7 @@ htmlcov/
 Thumbs.db
 
 # Project runtime output - backups must live on the host, never in the repo.
+/backup/
 /backups/
 /logs/
 backup-config.toml
