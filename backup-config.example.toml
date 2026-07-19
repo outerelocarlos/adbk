@@ -1,0 +1,60 @@
+# Example configuration for adbk.
+#
+# Copy this file to "backup-config.toml" (next to where you run the tool, or to
+# your per-user config directory) and edit as needed, or pass --config PATH.
+# Every value is optional and has a sensible default.
+
+[backup]
+# Where backups are written. If omitted, a per-user default is used
+# (e.g. ~/android-backups, or /data/backups inside the container).
+# destination = "D:/android-backups"      # Windows example
+# destination = "/mnt/backups/android"    # Linux/macOS example
+
+[adb]
+# Use a specific adb executable instead of auto-discovery.
+# path = "C:/platform-tools/adb.exe"
+
+# Connect to an ADB server instead of the local one. This is the recommended
+# way to reach a phone from inside a container: the host runs the ADB server and
+# handles USB, and the container connects over TCP.
+# server_host = "host.docker.internal"
+# server_port = 5037
+
+# Automatic installation policy for a missing ADB:
+#   true  -> install without asking (equivalent to --install-adb)
+#   false -> never install         (equivalent to --no-install-adb)
+#   unset -> ask when interactive
+# auto_install = true
+
+# Categories define what to back up. If you omit them entirely, a generic set of
+# defaults is used. Each category lists candidate Android paths; discovery keeps
+# only the ones that actually exist and are readable on the connected device.
+# Aliases like /sdcard and /storage/emulated/0 are treated as the same location.
+#
+# [[category]]
+# name = "Documents"
+# paths = ["/sdcard/Documents"]
+# description = "User documents"
+# default = true
+#
+# [[category]]
+# name = "Camera & Pictures"
+# paths = ["/sdcard/DCIM", "/sdcard/Pictures"]
+#
+# [[category]]
+# name = "WhatsApp media"
+# paths = ["/sdcard/Android/media/com.whatsapp"]
+#
+# [[category]]
+# name = "Game & app data"
+# paths = ["/sdcard/Android/data", "/sdcard/Android/obb"]
+# default = false   # large; opt in explicitly
+
+# Extra folders/files to always skip (never backed up), on top of the built-in
+# defaults (thumbnails, caches, trash, *.tmp, .nomedia, .gs_fs0, ...). Shell
+# wildcards (*, ?, []) are allowed; matching is case-insensitive and applies to a
+# single path component (a folder or file name), not the whole path.
+#
+# [filters]
+# ignore_dirs = [".Statuses", ".Links", "MyAppCache*"]
+# ignore_files = ["*.bak", "*.log", "*.part"]
