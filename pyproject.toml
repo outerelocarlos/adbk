@@ -1,0 +1,88 @@
+[project]
+name = "adbk"
+version = "0.1.0"
+description = "Interactive, cross-platform tool to back up an Android phone over ADB before migrating to a new device."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "outerelocarlos" }]
+keywords = ["android", "adb", "backup", "migration", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Archiving :: Backup",
+    "Topic :: Utilities",
+]
+
+# Runtime dependencies are deliberately minimal so the tool stays easy to read
+# and install. `rich` is used only for display and always degrades to plain
+# text when the terminal cannot support it.
+dependencies = [
+    "rich>=13.7",
+]
+
+[project.scripts]
+adbk = "adbk.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/outerelocarlos/adbk"
+Repository = "https://github.com/outerelocarlos/adbk"
+Issues = "https://github.com/outerelocarlos/adbk/issues"
+
+[dependency-groups]
+# Development tools. Installed with `uv sync` (which reads this group) but never
+# shipped as a runtime requirement.
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/adbk"]
+
+# ---------------------------------------------------------------------------
+# Ruff (lint + format)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# A readable, student-friendly baseline: pyflakes, pycodestyle, isort,
+# flake8-bugbear, pyupgrade, and a few correctness-focused extras.
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "PTH", "RUF"]
+ignore = [
+    "E501",  # line length is handled by the formatter, not the linter
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["adbk"]
+
+# ---------------------------------------------------------------------------
+# mypy (static types)
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+pretty = true
+files = ["src/adbk"]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra"

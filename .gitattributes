@@ -1,0 +1,10 @@
+# Normalize line endings to LF in the repository for cross-platform consistency.
+# This keeps shell scripts, the Dockerfile and Python files working identically
+# on Windows, Linux and macOS regardless of each contributor's autocrlf setting.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.zip binary
+*.ico binary
