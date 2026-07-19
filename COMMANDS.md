@@ -25,9 +25,13 @@ On the phone: **Settings -> Developer options -> USB debugging**, then accept th
 uv run adbk backup --dry-run          # inspect + plan, change nothing
 uv run adbk backup --copy             # copy only, never delete from the phone
 uv run adbk backup                    # default: verified safe move (deletes source after verify)
-uv run adbk backup --resume           # resume an interrupted run
-uv run adbk backup --backup-dir D:/phone-backup
+uv run adbk backup --resume           # resume the most recent backup
+uv run adbk backup --backup-dir D:/phone-backup   # set the root (default: ~/backup)
 ```
+
+Each run is saved in a dated sub-directory, e.g. `~/backup/2026-07-20/` (a second
+run the same day becomes `-2`, `-3`, ...). `restore`/`--resume` use the newest one
+under the root unless you pass `--manifest PATH`.
 
 In the interactive picker: `<num>` toggles a category, `d <num>` drills in to pick
 sub-folders, `a`/`n` select all/none, `Enter` continues. Inside a drill: `<num>`
