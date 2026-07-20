@@ -210,6 +210,7 @@ def test_backup_records_apps_and_restore_installs_them(tmp_path: Path) -> None:
     workflow.run_backup(
         device, backup_root=tmp_path, categories=_CATEGORIES,
         mode=TransferMode.COPY, console=_console(), assume_yes=True,
+        check_store=False,  # never reach the network from a test
     )
     manifest = load_manifest(tmp_path / MANIFEST_FILENAME)
     recorded = {app.package: app.availability for app in manifest.apps}
@@ -222,6 +223,27 @@ def test_backup_records_apps_and_restore_installs_them(tmp_path: Path) -> None:
         policy=None, console=_console(), assume_yes=True,
     )
     assert len(target.installed_apks) == 1
+
+
+def test_store_check_is_on_by_default_and_keeps_delisted_apks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    device = FakeDevice(serial="OLD")
+    device.add_file("/sdcard/Docs/a.txt", b"hello")
+    device.add_package("com.delisted", installer="com.android.vending")
+    # Pretend the store no longer lists it, without touching the network.
+    monkeypatch.setattr(workflow.apps, "store_available", lambda _package: False)
+
+    workflow.run_backup(
+        device, backup_root=tmp_path, categories=_CATEGORIES,
+        mode=TransferMode.COPY, console=_console(), assume_yes=True,
+    )  # check_store left unset: the prompt defaults to yes
+
+    manifest = load_manifest(tmp_path / MANIFEST_FILENAME)
+    delisted = manifest.apps[0]
+    assert delisted.store_checked
+    assert delisted.availability == "backup"  # delisted, so its APK was kept
+    assert delisted.apk_files
 
 
 # --- Dated backup directories -------------------------------------------------

@@ -524,7 +524,7 @@ def run_backup(
     resume: bool = False,
     config_snapshot: dict[str, str] | None = None,
     force_apk: tuple[str, ...] = (),
-    check_store: bool = False,
+    check_store: bool | None = None,
 ) -> BackupOutcome:
     """Run a full backup (or a dry-run plan) against ``device``."""
 
@@ -591,6 +591,7 @@ def run_backup(
     _record_apps(
         device, manifest, backup_root, identity.serial, console,
         force_apk=force_apk, check_store=check_store,
+        interactive=interactive, assume_yes=assume_yes,
     )
 
     manifest.finalize(outcome.state)
@@ -608,11 +609,22 @@ def _record_apps(
     console: Console,
     *,
     force_apk: tuple[str, ...],
-    check_store: bool,
+    check_store: bool | None,
+    interactive: bool,
+    assume_yes: bool,
 ) -> None:
     """Inventory the installed apps, keeping the APKs we could not re-download."""
 
-    console.print("\nRecording installed apps ...")
+    console.print("\nRecording installed apps so they can be reinstalled on restore ...")
+
+    # ``None`` means the user did not force the choice with a flag, so ask.
+    if check_store is None:
+        check_store = ui.confirm(
+            console,
+            "  Also ask the app store which apps are still listed? "
+            "(slower, but keeps the APK of delisted apps)",
+            assume_yes=assume_yes, interactive=interactive, default=True,
+        )
 
     def progress(done: int, total: int) -> None:
         if done == total or done % 25 == 0:
@@ -632,6 +644,13 @@ def _record_apps(
         return
 
     manifest.apps = records
+    if check_store:
+        answered = sum(1 for record in records if record.store_checked)
+        if answered < len(records):
+            console.print(Text(
+                f"    (the store answered for {answered}/{len(records)}; the rest "
+                "fell back to the installer)", style="yellow",
+            ))
     grouped = apps.summarize(records)
     console.print(
         f"    {len(records)} app(s): "

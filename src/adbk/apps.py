@@ -34,7 +34,10 @@ from adbk.paths import apk_relative_path, logical_to_local
 PLAY_INSTALLER = "com.android.vending"
 _NO_INSTALLER = {"", "null", "none"}
 _STORE_URL = "https://play.google.com/store/apps/details?id={package}&hl=en"
-_STORE_TIMEOUT = 10
+_STORE_TIMEOUT = 5
+# Give up on the store check after this many unanswered lookups in a row, so a
+# blocked or blackholed network cannot stretch a backup by one timeout per app.
+_STORE_FAILURE_LIMIT = 5
 
 
 def from_store(installer: str) -> bool:
@@ -126,6 +129,8 @@ def collect(
     forced = set(force_packages)
     packages = device.list_packages()
     records: list[AppRecord] = []
+    store_enabled = check_store
+    unanswered = 0
 
     for index, package in enumerate(packages, 1):
         details = device.package_details(package)
@@ -137,9 +142,15 @@ def collect(
         )
 
         store_ok: bool | None = None
-        if check_store:
+        if store_enabled:
             store_ok = store_available(package)
             record.store_checked = store_ok is not None
+            if store_ok is None:
+                unanswered += 1
+                if unanswered >= _STORE_FAILURE_LIMIT:
+                    store_enabled = False  # network unusable; stop asking
+            else:
+                unanswered = 0
 
         if backup_root is not None and wants_apk(record.installer, package, store_ok, forced):
             record.apk_files = pull_apks(device, package, backup_root, serial)

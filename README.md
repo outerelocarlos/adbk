@@ -88,7 +88,7 @@ Useful options (work before or after the command):
 | `--copy` | Back up by copying only; never delete anything from the phone. |
 | `--safe-move` | Verified safe move (default): delete each source only after its copy is verified. |
 | `--resume` | Resume an interrupted backup, re-verifying prior entries. |
-| `--check-store` | Ask the store whether each installed app is still listed (needs network). |
+| `--check-store` / `--no-check-store` | Force on/off the store lookup for installed apps (otherwise asked, default yes). |
 | `--adb-path PATH` | Use a specific `adb` executable. |
 | `--adb-server-host HOST` | Connect to an ADB server (e.g. `host.docker.internal`). |
 | `--adb-server-port PORT` | ADB server port (default `5037`). |
@@ -131,9 +131,10 @@ How it works:
   manifest with how it could be reinstalled - `backup` (its APK is kept here),
   `store` (re-downloadable), `unavailable` or `unknown`. APKs are kept only for
   apps that did **not** come from the store, since those are the irreplaceable
-  ones. `--check-store` additionally asks whether each listing is still live, so
-  **delisted** apps also get their APK kept. On restore, the kept APKs can be
-  installed directly (split APKs included) and the rest are listed for you.
+  ones. A backup also **asks the store which apps are still listed** (answering
+  yes by default), so **delisted** apps get their APK kept too; skip it with
+  `--no-check-store`. On restore, the kept APKs can be installed directly (split
+  APKs included) and the rest are listed for you.
 - **Categories** and their candidate Android paths come from configuration
   (`[[category]]` tables); discovery reports each as readable, inaccessible,
   missing, root-only or empty - a failed listing is never treated as empty.

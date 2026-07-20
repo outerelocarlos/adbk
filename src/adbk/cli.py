@@ -91,9 +91,12 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Copy only; never delete anything from the device.")
     backup.add_argument("--resume", action="store_true",
                         help="Resume an interrupted backup, re-verifying prior entries.")
-    backup.add_argument("--check-store", action="store_true",
-                        help="Ask the app store whether each installed app is still "
-                             "listed (needs network; delisted apps then get their APK kept).")
+    store_group = backup.add_mutually_exclusive_group()
+    store_group.add_argument("--check-store", action="store_true",
+                             help="Ask the app store which installed apps are still listed, "
+                                  "so delisted apps keep their APK (asked interactively).")
+    store_group.add_argument("--no-check-store", action="store_true",
+                             help="Never query the app store while inventorying apps.")
 
     restore = subparsers.add_parser("restore", parents=[common], help="Restore files onto the device.")
     restore.add_argument("--manifest", type=Path, metavar="PATH",
@@ -231,6 +234,16 @@ def _open_device(options: AdbOptions, console: Console, interactive: bool) -> De
     return AdbDevice(client, ready[0].serial)
 
 
+def _resolve_check_store(args: argparse.Namespace) -> bool | None:
+    """True/False when forced by a flag, None to ask (defaulting to yes)."""
+
+    if getattr(args, "check_store", False):
+        return True
+    if getattr(args, "no_check_store", False):
+        return False
+    return None
+
+
 def _resolve_mode(args: argparse.Namespace) -> TransferMode:
     if getattr(args, "copy", False):
         return TransferMode.COPY
@@ -271,7 +284,7 @@ def _run_backup(
             resume=resume,
             config_snapshot={"mode": str(mode)},
             force_apk=config.force_apk,
-            check_store=bool(getattr(args, "check_store", False)),
+            check_store=_resolve_check_store(args),
         )
     finally:
         uninstall()

@@ -64,8 +64,8 @@
 # Installed apps are always recorded in the manifest so a restore can bring them
 # back. Their APKs are kept only for apps that did NOT come from the store, since
 # those are the irreplaceable ones. A delisted app still reports the store as its
-# installer, so list such packages here to always keep their APK (or run the
-# backup with --check-store, which detects them automatically).
+# installer, so list such packages here to always keep their APK. The backup also
+# asks whether to check the store (default yes), which detects them for you.
 #
 # [apps]
 # force_apk = ["com.example.delisted_game"]
