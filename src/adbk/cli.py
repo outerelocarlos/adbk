@@ -91,6 +91,9 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Copy only; never delete anything from the device.")
     backup.add_argument("--resume", action="store_true",
                         help="Resume an interrupted backup, re-verifying prior entries.")
+    backup.add_argument("--check-store", action="store_true",
+                        help="Ask the app store whether each installed app is still "
+                             "listed (needs network; delisted apps then get their APK kept).")
 
     restore = subparsers.add_parser("restore", parents=[common], help="Restore files onto the device.")
     restore.add_argument("--manifest", type=Path, metavar="PATH",
@@ -267,6 +270,8 @@ def _run_backup(
             cancel=cancel,
             resume=resume,
             config_snapshot={"mode": str(mode)},
+            force_apk=config.force_apk,
+            check_store=bool(getattr(args, "check_store", False)),
         )
     finally:
         uninstall()

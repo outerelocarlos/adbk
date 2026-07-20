@@ -201,6 +201,29 @@ def test_restore_requires_confirmation(tmp_path: Path) -> None:
     assert not target.files  # nothing written without an explicit "yes"
 
 
+def test_backup_records_apps_and_restore_installs_them(tmp_path: Path) -> None:
+    device = FakeDevice(serial="OLD")
+    device.add_file("/sdcard/Docs/a.txt", b"hello")
+    device.add_package("com.store.app", installer="com.android.vending")
+    device.add_package("com.side.app", installer="null")
+
+    workflow.run_backup(
+        device, backup_root=tmp_path, categories=_CATEGORIES,
+        mode=TransferMode.COPY, console=_console(), assume_yes=True,
+    )
+    manifest = load_manifest(tmp_path / MANIFEST_FILENAME)
+    recorded = {app.package: app.availability for app in manifest.apps}
+    assert recorded == {"com.store.app": "store", "com.side.app": "backup"}
+
+    # Restoring onto a fresh phone installs only the app we hold an APK for.
+    target = FakeDevice(serial="NEW")
+    workflow.run_restore(
+        target, backup_root=tmp_path, manifest_path=None,
+        policy=None, console=_console(), assume_yes=True,
+    )
+    assert len(target.installed_apks) == 1
+
+
 # --- Dated backup directories -------------------------------------------------
 
 

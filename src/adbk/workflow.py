@@ -21,14 +21,21 @@ from pathlib import Path
 from rich.console import Console
 from rich.text import Text
 
-from adbk import discovery, filters, paths, selection, ui
+from adbk import apps, discovery, filters, paths, selection, ui
 from adbk import platform_support as ps
 from adbk import tree as treemod
 from adbk.device import DeviceInterface, RawEntry
 from adbk.errors import DeviceAccessError
-from adbk.manifest import MANIFEST_FILENAME, Manifest, ManifestEntry, load_manifest
+from adbk.manifest import (
+    MANIFEST_FILENAME,
+    AppRecord,
+    Manifest,
+    ManifestEntry,
+    load_manifest,
+)
 from adbk.models import (
     AccessState,
+    AppAvailability,
     Category,
     ConflictPolicy,
     DeviceIdentity,
@@ -516,6 +523,8 @@ def run_backup(
     cancel: CancellationToken | None = None,
     resume: bool = False,
     config_snapshot: dict[str, str] | None = None,
+    force_apk: tuple[str, ...] = (),
+    check_store: bool = False,
 ) -> BackupOutcome:
     """Run a full backup (or a dry-run plan) against ``device``."""
 
@@ -579,11 +588,57 @@ def run_backup(
         exclusions, cancel, resume, console, identity.serial, skipped,
     )
 
+    _record_apps(
+        device, manifest, backup_root, identity.serial, console,
+        force_apk=force_apk, check_store=check_store,
+    )
+
     manifest.finalize(outcome.state)
     manifest.save(manifest_path)
     outcome.manifest_path = manifest_path
     _report_outcome(console, outcome)
     return outcome
+
+
+def _record_apps(
+    device: DeviceInterface,
+    manifest: Manifest,
+    backup_root: Path,
+    serial: str,
+    console: Console,
+    *,
+    force_apk: tuple[str, ...],
+    check_store: bool,
+) -> None:
+    """Inventory the installed apps, keeping the APKs we could not re-download."""
+
+    console.print("\nRecording installed apps ...")
+
+    def progress(done: int, total: int) -> None:
+        if done == total or done % 25 == 0:
+            console.print(f"    apps: {done}/{total}")
+
+    try:
+        records = apps.collect(
+            device,
+            serial=serial,
+            backup_root=backup_root,
+            force_packages=force_apk,
+            check_store=check_store,
+            on_progress=progress,
+        )
+    except DeviceAccessError as exc:
+        console.print(f"    (could not list installed apps: {exc})")
+        return
+
+    manifest.apps = records
+    grouped = apps.summarize(records)
+    console.print(
+        f"    {len(records)} app(s): "
+        f"{len(grouped[AppAvailability.BACKUP])} kept as APK, "
+        f"{len(grouped[AppAvailability.STORE])} from the store, "
+        f"{len(grouped[AppAvailability.UNAVAILABLE])} unavailable."
+    )
 
 
 def _new_or_resume_manifest(
@@ -846,6 +901,64 @@ def _confirm_restore(
     )
 
 
+_APP_LIST_LIMIT = 20
+
+
+def _print_app_list(console: Console, heading: str, records: list[AppRecord]) -> None:
+    console.print(Text(f"\n  {heading}", style="bold"))
+    for record in records[:_APP_LIST_LIMIT]:
+        console.print(f"    {record.package}")
+    remaining = len(records) - _APP_LIST_LIMIT
+    if remaining > 0:
+        console.print(Text(f"    ... and {remaining} more", style="cyan"))
+
+
+def _restore_apps(
+    device: DeviceInterface,
+    manifest: Manifest,
+    backup_root: Path,
+    console: Console,
+    *,
+    interactive: bool,
+    assume_yes: bool,
+) -> None:
+    """Report the recorded apps and offer to install those we hold APKs for."""
+
+    if not manifest.apps:
+        return
+
+    grouped = apps.summarize(manifest.apps)
+    from_backup = grouped[AppAvailability.BACKUP]
+    from_store = grouped[AppAvailability.STORE]
+    missing = grouped[AppAvailability.UNAVAILABLE] + grouped[AppAvailability.UNKNOWN]
+
+    console.print(Text(f"\nApps recorded in this backup: {len(manifest.apps)}", style="bold"))
+    console.print(f"  {len(from_backup)} installable from the backup")
+    console.print(f"  {len(from_store)} to reinstall from the store")
+    console.print(f"  {len(missing)} with no recorded source")
+
+    if from_backup and ui.confirm(
+        console, f"\nInstall {len(from_backup)} app(s) from the backup now?",
+        assume_yes=assume_yes, interactive=interactive, default=False,
+    ):
+        installed = 0
+        failed = 0
+        for record in from_backup:
+            local = [paths.logical_to_local(backup_root, rel) for rel in record.apk_files]
+            present = [path for path in local if path.is_file()]
+            if present and device.install_apks(present):
+                installed += 1
+            else:
+                failed += 1
+                console.print(Text(f"    failed: {record.package}", style="yellow"))
+        console.print(f"  Installed {installed}, failed {failed}.")
+
+    if from_store:
+        _print_app_list(console, "Reinstall these from the store:", from_store)
+    if missing:
+        _print_app_list(console, "No source recorded (track these down manually):", missing)
+
+
 def _merge_restore(summary: RestoreSummary, part: RestoreSummary) -> None:
     summary.restored.extend(part.restored)
     summary.skipped.extend(part.skipped)
@@ -906,6 +1019,12 @@ def run_restore(
 
     if dry_run:
         console.print("\n(dry-run: no files were written to the device.)")
+        if manifest.apps:
+            grouped = apps.summarize(manifest.apps)
+            console.print(
+                f"(dry-run: {len(manifest.apps)} app(s) recorded, "
+                f"{len(grouped[AppAvailability.BACKUP])} installable from the backup.)"
+            )
         return 0
 
     if not _confirm_restore(
@@ -941,5 +1060,10 @@ def run_restore(
     console.print(
         f"\nRestore done: {len(summary.restored)} restored, {len(summary.skipped)} skipped, "
         f"{len(summary.failed)} failed, {len(summary.conflicts)} renamed."
+    )
+
+    _restore_apps(
+        device, manifest, backup_root, console,
+        interactive=interactive, assume_yes=assume_yes,
     )
     return 1 if summary.failed else 0
