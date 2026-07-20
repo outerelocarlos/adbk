@@ -77,8 +77,9 @@ def resolve_or_install_adb(
 
     if options.dry_run and not force_install:
         console.print(
-            f"ADB was not found. Installation into {ps.display_path(tools_dir)} "
-            "would be required. (dry-run: nothing downloaded or changed.)"
+            f"ADB was not found. Installing it into {ps.display_path(tools_dir)} "
+            "would be required, and a dry run changes nothing. "
+            "Run 'adbk setup-adb' first, then try this again."
         )
         return None
 
@@ -130,7 +131,10 @@ def ensure_adb_client(
 
     resolved = resolve_or_install_adb(options, console, interactive=interactive)
     if resolved is None:
-        raise AdbNotFoundError("No usable adb is available.")
+        raise AdbNotFoundError(
+            "No usable adb is available. Run 'adbk setup-adb' to install the "
+            "official platform-tools, or pass --adb-path to point at your own."
+        )
     return AdbClient(resolved.path, options.server_host, options.server_port)
 
 
