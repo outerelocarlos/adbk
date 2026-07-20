@@ -86,9 +86,9 @@ def build_parser() -> argparse.ArgumentParser:
     backup = subparsers.add_parser("backup", parents=[common], help="Back up the connected device.")
     mode_group = backup.add_mutually_exclusive_group()
     mode_group.add_argument("--safe-move", action="store_true",
-                            help="Verified safe move (default): delete each source only after verification.")
+                            help="Verified safe move: delete each source only after verification.")
     mode_group.add_argument("--copy", action="store_true",
-                            help="Copy only; never delete anything from the device.")
+                            help="Copy only (the default); never delete anything from the device.")
     backup.add_argument("--resume", action="store_true",
                         help="Resume an interrupted backup, re-verifying prior entries.")
     store_group = backup.add_mutually_exclusive_group()
@@ -244,10 +244,14 @@ def _resolve_check_store(args: argparse.Namespace) -> bool | None:
     return None
 
 
-def _resolve_mode(args: argparse.Namespace) -> TransferMode:
+def _resolve_mode(args: argparse.Namespace) -> TransferMode | None:
+    """The forced mode, or None to ask (which defaults to copy)."""
+
     if getattr(args, "copy", False):
         return TransferMode.COPY
-    return TransferMode.SAFE_MOVE
+    if getattr(args, "safe_move", False):
+        return TransferMode.SAFE_MOVE
+    return None
 
 
 def _run_backup(
@@ -282,7 +286,6 @@ def _run_backup(
             assume_yes=options.assume_yes,
             cancel=cancel,
             resume=resume,
-            config_snapshot={"mode": str(mode)},
             force_apk=config.force_apk,
             check_store=_resolve_check_store(args),
         )

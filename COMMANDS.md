@@ -24,7 +24,7 @@ On the phone: **Settings -> Developer options -> USB debugging**, then accept th
 ```bash
 uv run adbk backup --dry-run          # inspect + plan, change nothing
 uv run adbk backup --copy             # copy only, never delete from the phone
-uv run adbk backup                    # default: verified safe move (deletes source after verify)
+uv run adbk backup                    # asks copy or safe move (default: copy)
 uv run adbk backup --resume           # resume the most recent backup
 uv run adbk backup --no-check-store   # skip the store lookup (it is asked, default yes)
 uv run adbk backup --backup-dir D:/phone-backup   # set the root (default: ~/adbk)

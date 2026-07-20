@@ -63,9 +63,9 @@ and macOS.
 ## Commands
 
 ```bash
-python -m adbk backup              # back up the connected device (verified safe move)
+python -m adbk backup              # back up the connected device (asks copy or safe move)
 python -m adbk backup --copy       # back up, but never delete anything from the phone
-python -m adbk backup --safe-move  # the explicit default: delete each source after verify
+python -m adbk backup --safe-move  # delete each source once its copy is verified
 python -m adbk backup --resume     # resume an interrupted backup
 python -m adbk restore             # restore files from a backup manifest
 python -m adbk doctor              # environment + ADB health check
@@ -73,9 +73,10 @@ python -m adbk setup-adb           # download & install a managed ADB
 python -m adbk update-adb          # check for / install a newer managed ADB
 ```
 
-The two backup modes: **`--safe-move`** (the default) deletes each source file
-from the phone only after its copy is verified by SHA-256 on both sides;
-**`--copy`** transfers everything and leaves the phone untouched.
+A backup asks which of the two modes to use, defaulting to **copy**:
+**`--copy`** transfers everything and leaves the phone untouched, while
+**`--safe-move`** deletes each source file only after its copy is verified by
+SHA-256 on both sides. Passing either flag skips the question.
 
 Run with no subcommand to back up (or, if a manifest is present in the backup
 directory, be offered a restore). See [`COMMANDS.md`](COMMANDS.md) for a full
@@ -85,8 +86,8 @@ Useful options (work before or after the command):
 
 | Option | Purpose |
 | --- | --- |
-| `--copy` | Back up by copying only; never delete anything from the phone. |
-| `--safe-move` | Verified safe move (default): delete each source only after its copy is verified. |
+| `--copy` | Back up by copying only (the default); never delete anything from the phone. |
+| `--safe-move` | Verified safe move: delete each source only after its copy is verified. |
 | `--resume` | Resume an interrupted backup, re-verifying prior entries. |
 | `--check-store` / `--no-check-store` | Force on/off the store lookup for installed apps (otherwise asked, default yes). |
 | `--adb-path PATH` | Use a specific `adb` executable. |
@@ -102,8 +103,7 @@ Useful options (work before or after the command):
 ## Backing up and restoring
 
 ```bash
-# Verified safe move is the DEFAULT: each file is copied, its SHA-256 is checked
-# on both sides, and only then is the source deleted from the phone.
+# Copy is the DEFAULT and is what an unattended run uses: nothing is deleted.
 python -m adbk backup --backup-dir /path/to/backups
 
 # Copy only - never delete anything from the device:

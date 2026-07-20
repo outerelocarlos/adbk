@@ -246,6 +246,39 @@ def test_store_check_is_on_by_default_and_keeps_delisted_apks(
     assert delisted.apk_files
 
 
+# --- Transfer mode ------------------------------------------------------------
+
+
+def test_mode_defaults_to_copy_when_not_asked(tmp_path: Path) -> None:
+    device = FakeDevice(serial="S")
+    device.add_file("/sdcard/Docs/a.txt", b"hello")
+    # mode=None and no terminal: must never delete from the phone.
+    workflow.run_backup(
+        device, backup_root=tmp_path, categories=_CATEGORIES,
+        mode=None, console=_console(), interactive=False, assume_yes=True,
+        check_store=False,
+    )
+    assert device.exists("/sdcard/Docs/a.txt")  # source untouched
+    manifest = load_manifest(tmp_path / MANIFEST_FILENAME)
+    assert manifest.config_snapshot["mode"] == "copy"
+
+
+def test_mode_screen_picks_safe_move(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("builtins.input", lambda *_a: "2")
+    assert workflow._select_mode(_console(), interactive=True) is TransferMode.SAFE_MOVE
+
+
+def test_mode_screen_enter_keeps_copy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("builtins.input", lambda *_a: "")
+    assert workflow._select_mode(_console(), interactive=True) is TransferMode.COPY
+
+
+def test_build_mode_rows_marks_the_selection() -> None:
+    rows = [row.plain for row in workflow.build_mode_rows(TransferMode.COPY)]
+    assert any("[x]" in row and "Copy" in row for row in rows)
+    assert any("[ ]" in row and "Safe move" in row for row in rows)
+
+
 # --- Tree review grouping -----------------------------------------------------
 
 

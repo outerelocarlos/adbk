@@ -586,7 +586,7 @@ def run_backup(
     *,
     backup_root: Path,
     categories: list[Category],
-    mode: TransferMode,
+    mode: TransferMode | None,
     console: Console,
     dry_run: bool = False,
     interactive: bool = False,
@@ -632,11 +632,18 @@ def run_backup(
     # The selection report above already states the size, so no plan line here.
     total_bytes = selection.selected_total_bytes(estimates)
 
+    # ``None`` means no --copy/--safe-move flag was given, so ask.
+    if mode is None:
+        mode = _select_mode(console, interactive=interactive)
+
     if interactive and kept_pairs:
         _review_tree(console, device, kept_pairs)
 
     if dry_run:
-        console.print("\n(dry-run: no files were pulled, deleted or written.)")
+        console.print(
+            f"\n(dry-run, mode {_MODE_LABEL[mode]}: "
+            "no files were pulled, deleted or written.)"
+        )
         return BackupOutcome(ManifestState.CANCELLED, None, skipped_paths=skipped)
 
     if not kept_pairs:
@@ -804,6 +811,66 @@ def _merge(outcome: BackupOutcome, result: RootResult) -> None:
     outcome.deleted += result.deleted
     outcome.kept += result.kept
     outcome.failed += result.failed
+
+
+_MODE_LABEL = {TransferMode.COPY: "copy", TransferMode.SAFE_MOVE: "safe move"}
+
+_MODE_CHOICES: tuple[tuple[TransferMode, str, str], ...] = (
+    (TransferMode.COPY, "Copy", "leave everything on the phone"),
+    (
+        TransferMode.SAFE_MOVE,
+        "Safe move",
+        "delete each file from the phone once its copy is verified",
+    ),
+)
+
+
+def build_mode_rows(selected: TransferMode) -> list[Text]:
+    """The transfer-mode table as styled rows (pure; unit-tested)."""
+
+    name_width = max(len(name) for _, name, _ in _MODE_CHOICES)
+    rows: list[Text] = [Text("How should the files be transferred?", style="bold")]
+    for index, (mode, name, description) in enumerate(_MODE_CHOICES, 1):
+        chosen = mode is selected
+        row = Text()
+        row.append(f"  {index:>2}  ")
+        row.append("[x]" if chosen else "[ ]", style="bold green" if chosen else "dim")
+        row.append("  ")
+        row.append(name.ljust(name_width), style=None if chosen else "dim")
+        row.append("   ")
+        row.append(description, style="dim")
+        rows.append(row)
+    return rows
+
+
+def _select_mode(console: Console, *, interactive: bool) -> TransferMode:
+    """Ask how to transfer the files. Copy is the default: it never deletes.
+
+    Non-interactive runs get copy too, so an unattended backup can never delete
+    anything from the phone without ``--safe-move`` being asked for explicitly.
+    """
+
+    if not interactive:
+        return TransferMode.COPY
+
+    while True:
+        console.print()
+        for row in build_mode_rows(TransferMode.COPY):
+            console.print(row)
+        _print_legend(console, [
+            ("<num>", "choose that mode"),
+            ("Enter", "continue with copy"),
+        ])
+        console.print()
+        try:
+            raw = input("> ").strip()
+        except EOFError:
+            return TransferMode.COPY
+        if raw == "":
+            return TransferMode.COPY
+        if raw.isdigit() and 1 <= int(raw) <= len(_MODE_CHOICES):
+            return _MODE_CHOICES[int(raw) - 1][0]
+        console.print(Text("  (unrecognized command)", style="dim"))
 
 
 def _confirm_safe_move(
