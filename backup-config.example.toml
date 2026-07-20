@@ -6,9 +6,10 @@
 
 [backup]
 # Root directory backups are written to. If omitted, a per-user default is used
-# (e.g. ~/backup, or /data/backup inside the container). Each backup lands in a
-# dated sub-directory of this root, e.g. <destination>/2026-07-20/.
-# destination = "D:/backup"               # Windows example
+# (e.g. ~/android-backup, or /data/android-backup inside the container). Each
+# backup lands in a dated sub-directory of this root, e.g.
+# <destination>/2026-07-20/.
+# destination = "D:/android-backup"       # Windows example
 # destination = "/mnt/backups/android"    # Linux/macOS example
 
 [adb]

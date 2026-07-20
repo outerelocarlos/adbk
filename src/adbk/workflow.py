@@ -59,7 +59,7 @@ _SKIP_REASONS = {
 # --- Backup directory layout --------------------------------------------------
 #
 # The backup root holds one dated sub-directory per backup, e.g.
-# ``~/backup/2026-07-20/``. A new run gets today's date (with a numeric suffix
+# ``~/android-backup/2026-07-20/``. A new run gets today's date (with a suffix
 # if that date already holds a backup); restore and resume look up the most
 # recent dated backup under the root.
 

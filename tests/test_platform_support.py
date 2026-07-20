@@ -84,9 +84,9 @@ def test_managed_tools_dir_override(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 def test_default_backup_dir_container_vs_native(monkeypatch: pytest.MonkeyPatch, fake_home: Path) -> None:
     monkeypatch.setattr(ps, "in_container", lambda: True)
-    assert ps.default_backup_dir() == Path("/data/backup")
+    assert ps.default_backup_dir() == Path("/data/android-backup")
     monkeypatch.setattr(ps, "in_container", lambda: False)
-    assert ps.default_backup_dir() == fake_home / "backup"
+    assert ps.default_backup_dir() == fake_home / "android-backup"
 
 
 def test_sdk_candidates_include_android_home(monkeypatch: pytest.MonkeyPatch, fake_home: Path) -> None:
