@@ -10,11 +10,16 @@ from adbk import ui
 def test_print_error_shows_message_and_indented_hint(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    ui.print_error(ui.make_console(plain=True), "no device found.", "Check that:\n  1. cable")
+    ui.print_error(
+        ui.make_console(plain=True),
+        "No device found.",
+        "Check that:\n  1. The cable is connected\n\nThen run 'adbk doctor'.",
+    )
     out = capsys.readouterr().out
-    assert "Error: no device found." in out
+    assert "Error: No device found." in out
     assert "  Check that:" in out  # the hint sits under the message
-    assert "    1. cable" in out  # the caller's own layout is preserved
+    assert "    1. The cable is connected" in out  # the caller's layout is preserved
+    assert "'adbk doctor'" in out  # commands keep their quotes in plain output
 
 
 def test_print_error_without_a_hint_is_one_line(capsys: pytest.CaptureFixture[str]) -> None:

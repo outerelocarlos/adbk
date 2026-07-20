@@ -226,13 +226,13 @@ def _open_device(options: AdbOptions, console: Console, interactive: bool) -> De
     ready = [d for d in client.devices() if d.is_ready]
     if not ready:
         raise DeviceError(
-            "no ready Android device found.",
+            "No ready Android device found.",
             hint=(
                 "Check that:\n"
-                "  1. the phone is connected over USB\n"
+                "  1. The phone is connected over USB\n"
                 "  2. USB debugging is enabled\n"
                 "     (Settings -> Developer options -> USB debugging)\n"
-                '  3. you accepted the "Allow USB debugging" prompt on the phone\n'
+                '  3. You accepted the "Allow USB debugging" prompt on the phone\n'
                 "\n"
                 "Then run 'adbk doctor' to see what the tool can detect."
             ),

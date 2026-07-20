@@ -8,6 +8,8 @@ TUI framework.
 
 from __future__ import annotations
 
+import re
+
 from rich.console import Console
 from rich.text import Text
 
@@ -36,21 +38,58 @@ def make_console(*, plain: bool = False) -> Console:
     )
 
 
+_COMMAND = re.compile(r"'[^']+'")
+_STEP = re.compile(r"^(\s*)(\d+\.)\s+(.*)$")
+
+
+def _highlight_commands(text: str) -> Text:
+    """A hint line with any 'quoted command' picked out, so it is easy to spot."""
+
+    line = Text()
+    position = 0
+    for match in _COMMAND.finditer(text):
+        line.append(text[position : match.start()])
+        line.append(match.group(0), style="bold cyan")
+        position = match.end()
+    line.append(text[position:])
+    return line
+
+
 def print_error(console: Console, message: str, hint: str = "") -> None:
     """Print an error: a highlighted header, then optional indented guidance.
 
-    The hint is printed verbatim (minus surrounding blank lines) so a caller can
-    lay out numbered steps, and is indented to sit under the message.
+    Hint lines keep the layout the caller wrote, with three touches of style so
+    the block scans quickly: a line ending in ``:`` is a heading, a leading
+    ``N.`` is a numbered step, and 'quoted commands' are highlighted.
     """
 
     header = Text()
     header.append("Error: ", style="bold red")
-    header.append(message)
+    header.append(message, style="bold")
     console.print(header)
-    if hint:
-        console.print()
-        for row in hint.strip("\n").splitlines():
-            console.print(Text("  " + row) if row.strip() else Text())
+    if not hint:
+        return
+
+    console.print()
+    for row in hint.strip("\n").splitlines():
+        if not row.strip():
+            console.print()
+            continue
+        if row.rstrip().endswith(":"):
+            console.print(Text("  " + row, style="bold"))
+            continue
+        step = _STEP.match(row)
+        if step is not None:
+            indent, number, rest = step.groups()
+            line = Text("  " + indent)
+            line.append(number, style="bold cyan")
+            line.append(" ")
+            line.append_text(_highlight_commands(rest))
+            console.print(line)
+            continue
+        line = Text("  ")
+        line.append_text(_highlight_commands(row))
+        console.print(line)
 
 
 def confirm(

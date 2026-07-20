@@ -132,8 +132,11 @@ def ensure_adb_client(
     resolved = resolve_or_install_adb(options, console, interactive=interactive)
     if resolved is None:
         raise AdbNotFoundError(
-            "No usable adb is available. Run 'adbk setup-adb' to install the "
-            "official platform-tools, or pass --adb-path to point at your own."
+            "No usable adb is available.",
+            hint=(
+                "Run 'adbk setup-adb' to install the official platform-tools,\n"
+                "or pass '--adb-path' to point at your own."
+            ),
         )
     return AdbClient(resolved.path, options.server_host, options.server_port)
 
