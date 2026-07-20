@@ -246,6 +246,29 @@ def test_store_check_is_on_by_default_and_keeps_delisted_apks(
     assert delisted.apk_files
 
 
+# --- Tree review grouping -----------------------------------------------------
+
+
+def test_group_roots_by_category_keeps_order() -> None:
+    pairs = [("Apps", "/x"), ("Media", "/y"), ("Apps", "/z")]
+    assert workflow.group_roots_by_category(pairs) == [("Apps", ["/x", "/z"]), ("Media", ["/y"])]
+
+
+def test_common_parent_nests_sibling_folders() -> None:
+    roots = ["/storage/emulated/0/Android/data", "/storage/emulated/0/Android/obb"]
+    assert workflow.common_parent(roots) == "/storage/emulated/0/Android"
+
+
+def test_common_parent_ignores_the_shared_storage_root() -> None:
+    # DCIM and Pictures only share /storage/emulated/0, which adds no meaning.
+    roots = ["/storage/emulated/0/DCIM", "/storage/emulated/0/Pictures"]
+    assert workflow.common_parent(roots) is None
+
+
+def test_common_parent_needs_more_than_one_root() -> None:
+    assert workflow.common_parent(["/storage/emulated/0/Android/data"]) is None
+
+
 # --- Dated backup directories -------------------------------------------------
 
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from rich.console import Console
 from rich.text import Text
@@ -44,6 +44,7 @@ from adbk.models import (
     ManifestState,
     Operation,
     TransferMode,
+    TreeNode,
 )
 from adbk.restore import RestoreSummary, group_name
 from adbk.restore import restore as run_restore_files
@@ -479,6 +480,37 @@ def _report_selection(console: Console, estimates: list[CategoryEstimate]) -> No
 # --- Shallow review + sub-folder exclusion ------------------------------------
 
 
+def group_roots_by_category(kept_pairs: list[tuple[str, str]]) -> list[tuple[str, list[str]]]:
+    """Collect each category's roots together, keeping the original order."""
+
+    grouped: dict[str, list[str]] = {}
+    for category, root in kept_pairs:
+        grouped.setdefault(category, []).append(root)
+    return list(grouped.items())
+
+
+def common_parent(roots: list[str]) -> str | None:
+    """The deepest folder several roots share, when it is worth showing.
+
+    ``Android/data`` and ``Android/obb`` share ``Android``, which makes a useful
+    single tree. ``DCIM`` and ``Pictures`` only share the shared-storage root
+    itself, which would add a meaningless level, so that returns ``None``.
+    """
+
+    if len(roots) < 2:
+        return None
+    shared: list[str] = []
+    for segments in zip(*(PurePosixPath(root).parts for root in roots), strict=False):
+        if len(set(segments)) != 1:
+            break
+        shared.append(segments[0])
+    if not shared:
+        return None
+    candidate = str(PurePosixPath(*shared))
+    # Only worthwhile when deeper than the shared-storage root.
+    return candidate if candidate.startswith(paths.CANONICAL_SHARED_ROOT + "/") else None
+
+
 def _review_tree(
     console: Console, device: DeviceInterface, kept_pairs: list[tuple[str, str]]
 ) -> None:
@@ -490,13 +522,30 @@ def _review_tree(
     ):
         return
     ascii_only = _tree_connector(console) == "|_ "
-    for category, root in kept_pairs:
-        node = discovery.build_tree(
-            device, root, max_depth=_REVIEW_MAX_DEPTH, max_children=_REVIEW_MAX_CHILDREN
-        )
+
+    for category, roots in group_roots_by_category(kept_pairs):
+        nodes = [
+            discovery.build_tree(
+                device, root, max_depth=_REVIEW_MAX_DEPTH, max_children=_REVIEW_MAX_CHILDREN
+            )
+            for root in roots
+        ]
+        # Several roots under one folder read better as a single tree.
+        shared = common_parent(roots)
+        if shared is not None:
+            nodes = [
+                TreeNode(
+                    name=PurePosixPath(shared).name or shared,
+                    android_path=shared,
+                    entry_type=EntryType.DIRECTORY,
+                    children=nodes,
+                )
+            ]
+
         console.print(Text(f"\n{category}:", style="bold"))
-        for line in treemod.render_lines(node, ascii_only=ascii_only):
-            console.print(line)
+        for node in nodes:
+            for line in treemod.render_lines(node, ascii_only=ascii_only):
+                console.print(line)
 
 
 # --- Skips --------------------------------------------------------------------
