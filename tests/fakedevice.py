@@ -156,13 +156,20 @@ class FakeDevice:
                 found = True
         return total if found else None
 
-    def disk_usage_tree(self, path: str) -> dict[str, int]:
+    def disk_usage_tree(self, path: str, depth: int = 1) -> dict[str, int]:
         norm = normalize_device_path(path)
         sizes: dict[str, int] = {norm: self.disk_usage(norm) or 0}
-        for name in self._children(norm):
-            child = f"{norm}/{name}"
-            if child in self.dirs:
-                sizes[child] = self.disk_usage(child) or 0
+
+        def walk(current: str, level: int) -> None:
+            if level > depth:
+                return
+            for name in self._children(current):
+                child = f"{current}/{name}"
+                if child in self.dirs:
+                    sizes[child] = self.disk_usage(child) or 0
+                    walk(child, level + 1)
+
+        walk(norm, 1)
         return sizes
 
     def sha256(self, path: str) -> str | None:

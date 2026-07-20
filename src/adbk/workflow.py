@@ -14,6 +14,7 @@ an in-memory fake device.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path, PurePosixPath
@@ -511,6 +512,21 @@ def common_parent(roots: list[str]) -> str | None:
     return candidate if candidate.startswith(paths.CANONICAL_SHARED_ROOT + "/") else None
 
 
+def annotate_dir_sizes(node: TreeNode, sizes: dict[str, int]) -> None:
+    """Attach ``du`` totals to every directory in the tree, in place.
+
+    A folder's total covers what the tree does not expand, so an unexpanded
+    folder still shows how much it holds.
+    """
+
+    if node.entry_type is EntryType.DIRECTORY:
+        size = sizes.get(node.android_path)
+        if size is not None:
+            node.size = size
+    for child in node.children:
+        annotate_dir_sizes(child, sizes)
+
+
 def _review_tree(
     console: Console, device: DeviceInterface, kept_pairs: list[tuple[str, str]]
 ) -> None:
@@ -522,22 +538,28 @@ def _review_tree(
     ):
         return
     ascii_only = _tree_connector(console) == "|_ "
+    console.print(Text("  Measuring folder sizes ...", style="dim"))
 
     for category, roots in group_roots_by_category(kept_pairs):
-        nodes = [
-            discovery.build_tree(
+        nodes = []
+        for root in roots:
+            node = discovery.build_tree(
                 device, root, max_depth=_REVIEW_MAX_DEPTH, max_children=_REVIEW_MAX_CHILDREN
             )
-            for root in roots
-        ]
+            # Sizes are a nicety; never fail the review over them.
+            with contextlib.suppress(DeviceAccessError):
+                annotate_dir_sizes(node, device.disk_usage_tree(root, depth=_REVIEW_MAX_DEPTH))
+            nodes.append(node)
         # Several roots under one folder read better as a single tree.
         shared = common_parent(roots)
         if shared is not None:
+            total = sum(child.size or 0 for child in nodes)
             nodes = [
                 TreeNode(
                     name=PurePosixPath(shared).name or shared,
                     android_path=shared,
                     entry_type=EntryType.DIRECTORY,
+                    size=total or None,
                     children=nodes,
                 )
             ]

@@ -104,6 +104,10 @@ _ASCII_BRANCHES = ("|- ", "`- ", "|  ", "   ")
 
 def _annotate_text(label: str, node: TreeNode, label_style: str = "") -> Text:
     text = Text(label, style=label_style)
+    # Folder totals come from `du`, so they cover sub-folders the tree does not
+    # expand. Files carry their own size on their line instead.
+    if node.entry_type is EntryType.DIRECTORY and node.size is not None:
+        text.append(f"   {human_size(node.size)}", style="dim")
     state = _STATE_LABEL.get(node.access_state)
     if state:
         text.append(f"  ({state})", style="yellow")
