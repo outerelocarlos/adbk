@@ -123,7 +123,7 @@ python -m adbk restore --conflict overwrite-different
 How it works:
 
 - **Backups are dated**: each run is stored in `<root>/YYYY-MM-DD/` (default
-  root `~/android-backup`, or a container's `/data/android-backup`; override with
+  root `~/adbk`, or a container's `/data/adbk`; override with
   `--backup-dir`). A second backup on the same day gets a `-2`, `-3`, ... suffix.
   `restore` and `--resume` act on the most recent dated backup under the root
   unless you point them at a specific one with `--manifest`.

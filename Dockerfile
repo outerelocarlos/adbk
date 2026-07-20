@@ -33,11 +33,11 @@ RUN uv sync --frozen
 
 # Run as a non-root user and pre-create the mount points it writes to.
 RUN useradd --create-home --uid 1000 appuser \
-    && mkdir -p /data/android-backup /config \
-    && chown -R appuser /data/android-backup /config /app /opt/venv
+    && mkdir -p /data/adbk /config \
+    && chown -R appuser /data/adbk /config /app /opt/venv
 USER appuser
 
-VOLUME ["/data/android-backup"]
+VOLUME ["/data/adbk"]
 WORKDIR /app
 
 # Default entry point runs the application; the dev service overrides this to

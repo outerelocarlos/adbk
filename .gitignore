@@ -24,7 +24,7 @@ htmlcov/
 Thumbs.db
 
 # Project runtime output - backups must live on the host, never in the repo.
-/android-backup/
+/adbk/
 /backup/
 /logs/
 backup-config.toml

@@ -27,10 +27,10 @@ uv run adbk backup --copy             # copy only, never delete from the phone
 uv run adbk backup                    # default: verified safe move (deletes source after verify)
 uv run adbk backup --resume           # resume the most recent backup
 uv run adbk backup --no-check-store   # skip the store lookup (it is asked, default yes)
-uv run adbk backup --backup-dir D:/phone-backup   # set the root (default: ~/android-backup)
+uv run adbk backup --backup-dir D:/phone-backup   # set the root (default: ~/adbk)
 ```
 
-Each run is saved in a dated sub-directory, e.g. `~/android-backup/2026-07-20/` (a second
+Each run is saved in a dated sub-directory, e.g. `~/adbk/2026-07-20/` (a second
 run the same day becomes `-2`, `-3`, ...). `restore`/`--resume` use the newest one
 under the root unless you pass `--manifest PATH`.
 

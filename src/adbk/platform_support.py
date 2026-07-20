@@ -194,14 +194,14 @@ def default_config_file() -> Path:
 def default_backup_dir() -> Path:
     """Default root directory for backups when the user does not choose one.
 
-    Inside a container we prefer the conventional ``/data/android-backup`` mount
-    point; natively we use ``android-backup`` in the user's home directory. Each
+    Inside a container we prefer the conventional ``/data/adbk`` mount
+    point; natively we use ``adbk`` in the user's home directory. Each
     individual backup is then stored in a dated sub-directory of this root.
     """
 
     if in_container():
-        return Path("/data/android-backup")
-    return _home() / "android-backup"
+        return Path("/data/adbk")
+    return _home() / "adbk"
 
 
 def android_sdk_adb_candidates() -> list[Path]:
