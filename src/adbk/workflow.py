@@ -558,8 +558,8 @@ def run_backup(
         if path.access_state is not AccessState.READABLE and path.category in included_categories
     ]
 
+    # The selection report above already states the size, so no plan line here.
     total_bytes = selection.selected_total_bytes(estimates)
-    console.print(f"\nPlan: ~{treemod.human_size(total_bytes)} across {len(kept_pairs)} path(s).")
 
     if interactive and kept_pairs:
         _review_tree(console, device, kept_pairs)
