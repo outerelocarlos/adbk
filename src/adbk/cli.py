@@ -194,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
         console.print(f"\nCancelled ({ps.cancel_key_hint()}).")
         return 130
     except AndroidBackupError as exc:
-        console.print(f"Error: {exc}")
+        ui.print_error(console, str(exc), exc.hint)
         return 1
 
 
@@ -226,8 +226,16 @@ def _open_device(options: AdbOptions, console: Console, interactive: bool) -> De
     ready = [d for d in client.devices() if d.is_ready]
     if not ready:
         raise DeviceError(
-            "No ready Android device found. Connect the phone, enable USB debugging, "
-            "and accept the 'Allow USB debugging' prompt (run 'doctor' to check)."
+            "no ready Android device found.",
+            hint=(
+                "Check that:\n"
+                "  1. the phone is connected over USB\n"
+                "  2. USB debugging is enabled\n"
+                "     (Settings -> Developer options -> USB debugging)\n"
+                '  3. you accepted the "Allow USB debugging" prompt on the phone\n'
+                "\n"
+                "Then run 'adbk doctor' to see what the tool can detect."
+            ),
         )
     if len(ready) > 1:
         console.print(f"Multiple devices connected; using {ready[0].serial}.")

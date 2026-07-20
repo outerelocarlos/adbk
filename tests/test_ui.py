@@ -7,6 +7,21 @@ import pytest
 from adbk import ui
 
 
+def test_print_error_shows_message_and_indented_hint(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ui.print_error(ui.make_console(plain=True), "no device found.", "Check that:\n  1. cable")
+    out = capsys.readouterr().out
+    assert "Error: no device found." in out
+    assert "  Check that:" in out  # the hint sits under the message
+    assert "    1. cable" in out  # the caller's own layout is preserved
+
+
+def test_print_error_without_a_hint_is_one_line(capsys: pytest.CaptureFixture[str]) -> None:
+    ui.print_error(ui.make_console(plain=True), "boom.")
+    assert capsys.readouterr().out.strip() == "Error: boom."
+
+
 @pytest.mark.parametrize("answer", ["y", "yes", "Yeah", "yep", "YUP", "ok", "okay", "sure", "true", "1", "aye"])
 def test_confirm_accepts_many_yeses(monkeypatch: pytest.MonkeyPatch, answer: str) -> None:
     monkeypatch.setattr("builtins.input", lambda _prompt: answer)

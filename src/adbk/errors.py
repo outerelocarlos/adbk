@@ -10,7 +10,16 @@ from __future__ import annotations
 
 
 class AndroidBackupError(Exception):
-    """Base class for all expected, user-facing errors."""
+    """Base class for all expected, user-facing errors.
+
+    ``hint`` carries optional multi-line guidance printed under the message, so
+    an error can spell out what to do next instead of cramming every detail
+    into one long sentence.
+    """
+
+    def __init__(self, *args: object, hint: str = "") -> None:
+        super().__init__(*args)
+        self.hint = hint
 
 
 # --- ADB discovery / execution ------------------------------------------------

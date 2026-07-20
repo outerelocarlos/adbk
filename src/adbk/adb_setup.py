@@ -110,7 +110,7 @@ def resolve_or_install_adb(
         else:
             raise AdbNotFoundError(
                 "No usable adb was found. Re-run with --install-adb (or --yes) to "
-                "install the official platform-tools, or run 'setup-adb'."
+                "install the official platform-tools, or run 'adbk setup-adb'."
             )
 
     if not permitted:

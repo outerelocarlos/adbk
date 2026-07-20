@@ -9,6 +9,7 @@ TUI framework.
 from __future__ import annotations
 
 from rich.console import Console
+from rich.text import Text
 
 from adbk import platform_support as ps
 
@@ -33,6 +34,23 @@ def make_console(*, plain: bool = False) -> Console:
         # Never interpret "[x]" in a filename or checkbox as style markup.
         markup=False,
     )
+
+
+def print_error(console: Console, message: str, hint: str = "") -> None:
+    """Print an error: a highlighted header, then optional indented guidance.
+
+    The hint is printed verbatim (minus surrounding blank lines) so a caller can
+    lay out numbered steps, and is indented to sit under the message.
+    """
+
+    header = Text()
+    header.append("Error: ", style="bold red")
+    header.append(message)
+    console.print(header)
+    if hint:
+        console.print()
+        for row in hint.strip("\n").splitlines():
+            console.print(Text("  " + row) if row.strip() else Text())
 
 
 def confirm(
