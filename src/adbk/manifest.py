@@ -18,6 +18,7 @@ from pathlib import Path
 from adbk import __version__
 from adbk.errors import ConfigError
 from adbk.models import (
+    AppAvailability,
     CopyResult,
     DeletionResult,
     DeviceIdentity,
@@ -28,7 +29,7 @@ from adbk.models import (
     VerificationResult,
 )
 
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 MANIFEST_FILENAME = "manifest.json"
 
 
@@ -78,6 +79,42 @@ class ManifestEntry:
         )
 
 
+@dataclass
+class AppRecord:
+    """One installed app, and how it could be reinstalled on a new device."""
+
+    package: str
+    label: str = ""
+    version_name: str = ""
+    version_code: str = ""
+    installer: str = ""
+    apk_files: list[str] = field(default_factory=list)  # logical relative paths
+    availability: AppAvailability = AppAvailability.UNKNOWN
+    store_checked: bool = False  # True only when the store was actually queried
+    note: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> AppRecord:
+        raw_apks = data.get("apk_files", [])
+        apk_files = [str(item) for item in raw_apks] if isinstance(raw_apks, list) else []
+        return cls(
+            package=str(data.get("package", "")),
+            label=str(data.get("label", "")),
+            version_name=str(data.get("version_name", "")),
+            version_code=str(data.get("version_code", "")),
+            installer=str(data.get("installer", "")),
+            apk_files=apk_files,
+            availability=AppAvailability(
+                str(data.get("availability", AppAvailability.UNKNOWN))
+            ),
+            store_checked=bool(data.get("store_checked", False)),
+            note=str(data.get("note", "")),
+        )
+
+
 def _opt_int(value: object) -> int | None:
     return int(value) if isinstance(value, int) else None
 
@@ -98,6 +135,7 @@ class Manifest:
     state: ManifestState = ManifestState.IN_PROGRESS
     selected_categories: list[str] = field(default_factory=list)
     entries: dict[str, ManifestEntry] = field(default_factory=dict)
+    apps: list[AppRecord] = field(default_factory=list)
     skipped: list[dict[str, str]] = field(default_factory=list)
     config_snapshot: dict[str, str] = field(default_factory=dict)
 
@@ -133,6 +171,7 @@ class Manifest:
             "root_available": self.device.root_available,
             "selected_categories": list(self.selected_categories),
             "entries": [entry.to_dict() for entry in self.entries.values()],
+            "apps": [app.to_dict() for app in self.apps],
             "skipped": list(self.skipped),
             "config_snapshot": dict(self.config_snapshot),
         }
@@ -170,6 +209,10 @@ class Manifest:
                 if isinstance(item, dict):
                     entry = ManifestEntry.from_dict(item)
                     entries[entry.local_relative_path] = entry
+        apps_raw = data.get("apps", [])
+        apps = [
+            AppRecord.from_dict(item) for item in apps_raw if isinstance(item, dict)
+        ] if isinstance(apps_raw, list) else []
         skipped_raw = data.get("skipped", [])
         skipped = [
             {str(k): str(v) for k, v in item.items()}
@@ -199,6 +242,7 @@ class Manifest:
             state=ManifestState(str(data.get("state", ManifestState.IN_PROGRESS))),
             selected_categories=categories,
             entries=entries,
+            apps=apps,
             skipped=skipped,
             config_snapshot=snapshot,
         )

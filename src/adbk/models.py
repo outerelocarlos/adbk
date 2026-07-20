@@ -66,6 +66,15 @@ class ManifestState(StrEnum):
     CANCELLED = "cancelled"
 
 
+class AppAvailability(StrEnum):
+    """How an installed app could be brought back on a new device."""
+
+    BACKUP = "backup"  # its APK is stored in this backup, so we can install it
+    STORE = "store"  # expected to be installable from the app store
+    UNAVAILABLE = "unavailable"  # neither: it would have to be found elsewhere
+    UNKNOWN = "unknown"  # could not be determined
+
+
 class ConflictPolicy(StrEnum):
     SKIP_IDENTICAL = "skip_identical"
     OVERWRITE_IF_DIFFERENT = "overwrite_if_different"

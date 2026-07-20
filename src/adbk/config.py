@@ -29,6 +29,9 @@ class AppConfig:
     categories: tuple[Category, ...] = field(default_factory=tuple)
     ignore_dirs: tuple[str, ...] = field(default_factory=tuple)
     ignore_files: tuple[str, ...] = field(default_factory=tuple)
+    # Packages whose APK is always kept, even if they came from the store (use
+    # this for delisted apps that a store check would otherwise mark available).
+    force_apk: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _as_path(value: object, field: str) -> Path | None:
@@ -71,6 +74,9 @@ def load_config(path: Path | None) -> AppConfig:
     backup = raw.get("backup", {})
     adb = raw.get("adb", {})
     filters_table = raw.get("filters", {})
+    apps_table = raw.get("apps", {})
+    if not isinstance(apps_table, dict):
+        raise ConfigError("Config section [apps] must be a table.")
     if not isinstance(backup, dict) or not isinstance(adb, dict):
         raise ConfigError("Config sections [backup] and [adb] must be tables.")
     if not isinstance(filters_table, dict):
@@ -85,6 +91,7 @@ def load_config(path: Path | None) -> AppConfig:
         categories=_parse_categories(raw.get("category", [])),
         ignore_dirs=_as_str_list(filters_table.get("ignore_dirs"), "filters.ignore_dirs"),
         ignore_files=_as_str_list(filters_table.get("ignore_files"), "filters.ignore_files"),
+        force_apk=_as_str_list(apps_table.get("force_apk"), "apps.force_apk"),
     )
 
 

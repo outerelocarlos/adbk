@@ -107,6 +107,17 @@ def logical_relative_path(serial: str, android_path: str) -> str:
     return "/".join(parts)
 
 
+def apk_relative_path(serial: str, package: str, apk_path: str) -> str:
+    """Where a pulled APK is stored: ``devices/<serial>/apks/<package>/<file>``.
+
+    Split apps contribute several APKs, so the file name is kept to tell them
+    apart (``base.apk``, ``split_config.arm64_v8a.apk``, ...).
+    """
+
+    filename = PurePosixPath(apk_path).name or "base.apk"
+    return "/".join(["devices", sanitize_serial(serial), "apks", package, filename])
+
+
 def drop_nested_paths(paths: Iterable[str]) -> list[str]:
     """Keep only top-level paths, dropping any that sit inside another.
 
