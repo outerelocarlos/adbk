@@ -11,7 +11,8 @@ from adbk import filters
     "name",
     [".Thumbs", ".StickerThumbs", ".thumbnails", "thumbnails", "composeCache",
      ".wamocache", "WhatsApp AI Editor Cache", ".trash", "logs", "tmp", "temp", "lost.dir",
-     ".recycle", ".RecycleBin", "$RECYCLE.BIN", ".gs_fs0"],
+     ".recycle", ".RecycleBin", "$RECYCLE.BIN", ".gs_fs0",
+     "no_backup", "code_cache"],  # the standard Android/data/<pkg> throwaways
 )
 def test_junk_dir_names(name: str) -> None:
     assert filters.is_junk_dir_name(name)

@@ -26,6 +26,9 @@ _JUNK_DIR_EXACT = frozenset({
     "tmp", ".tmp", "temp", ".temp",
     ".face", ".faces",
     ".gs_fs0",  # Glide image-loading library disk cache (regenerable)
+    # Android's own opt-out: an app puts data here precisely to say "never back
+    # this up". It sits beside files/ and cache/ in Android/data/<package>/.
+    "no_backup",
 })
 
 # Files that carry no migration value.
