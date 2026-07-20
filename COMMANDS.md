@@ -26,6 +26,7 @@ uv run adbk backup --dry-run          # inspect + plan, change nothing
 uv run adbk backup --copy             # copy only, never delete from the phone
 uv run adbk backup                    # default: verified safe move (deletes source after verify)
 uv run adbk backup --resume           # resume the most recent backup
+uv run adbk backup --check-store      # also verify each app is still listed in the store
 uv run adbk backup --backup-dir D:/phone-backup   # set the root (default: ~/android-backup)
 ```
 

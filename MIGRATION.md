@@ -49,9 +49,15 @@ the **ROMs**/**Downloads** categories, not this one. Add your own emulator with 
 
 ## Delisted or private-save games
 
-Some games are removed from the store, or keep their save in private
-`/data/data` with no shared-storage copy. To preserve one fully, keep all three
-pieces:
+Every installed app is recorded in the manifest, and the APK of any app that did
+not come from the store is kept automatically, so most sideloaded games are
+already preserved. A **delisted** game is the awkward case: it still reports the
+store as its installer, so either back up with `--check-store` (which detects
+that the listing is gone) or list its package under `[apps] force_apk` in
+`backup-config.toml`. Restore can then reinstall it directly.
+
+The OBB and the save still need the manual steps below. To preserve a game
+fully, keep all three pieces:
 
 1. **APK** - pull the installed app package (no root needed):
    ```

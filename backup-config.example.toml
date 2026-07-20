@@ -60,3 +60,12 @@
 # [filters]
 # ignore_dirs = [".Statuses", ".Links", "MyAppCache*"]
 # ignore_files = ["*.bak", "*.log", "*.part"]
+
+# Installed apps are always recorded in the manifest so a restore can bring them
+# back. Their APKs are kept only for apps that did NOT come from the store, since
+# those are the irreplaceable ones. A delisted app still reports the store as its
+# installer, so list such packages here to always keep their APK (or run the
+# backup with --check-store, which detects them automatically).
+#
+# [apps]
+# force_apk = ["com.example.delisted_game"]
