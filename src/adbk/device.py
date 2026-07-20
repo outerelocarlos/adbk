@@ -54,6 +54,10 @@ class DeviceInterface(Protocol):
     def push(self, local: Path, remote: str) -> None: ...
     def delete_file(self, remote: str) -> bool: ...
     def delete_dir(self, remote: str) -> bool: ...
+    def list_packages(self) -> list[str]: ...
+    def package_apks(self, package: str) -> list[str]: ...
+    def package_details(self, package: str) -> dict[str, str]: ...
+    def install_apks(self, local_paths: list[Path]) -> bool: ...
 
 
 def _parse_entry_line(line: str) -> RawEntry | None:
@@ -147,6 +151,54 @@ def parse_ls_errors(stderr: str) -> set[str]:
             if middle:
                 inaccessible.add(middle)
     return inaccessible
+
+
+def _package_prefixed(output: str) -> list[str]:
+    """Values from ``package:<value>`` lines, as printed by ``pm``."""
+
+    values: list[str] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("package:"):
+            value = stripped[len("package:") :].strip()
+            if value:
+                values.append(value)
+    return values
+
+
+def parse_package_list(output: str) -> list[str]:
+    """Package names from ``pm list packages`` output."""
+
+    return sorted(set(_package_prefixed(output)))
+
+
+def parse_package_paths(output: str) -> list[str]:
+    """APK paths from ``pm path <package>`` (several lines when the app is split)."""
+
+    return _package_prefixed(output)
+
+
+_DETAIL_KEYS = ("versionName", "versionCode", "installerPackageName")
+
+
+def parse_package_details(output: str) -> dict[str, str]:
+    """Pick version and installer fields out of ``dumpsys package <package>``.
+
+    Lines look like ``versionCode=170 minSdk=23 targetSdk=33``, so only the first
+    token after ``key=`` is kept. The first occurrence of each key wins.
+    """
+
+    details: dict[str, str] = {}
+    for line in output.splitlines():
+        stripped = line.strip()
+        for key in _DETAIL_KEYS:
+            if key in details:
+                continue
+            prefix = f"{key}="
+            if stripped.startswith(prefix):
+                tokens = stripped[len(prefix) :].split()
+                details[key] = tokens[0] if tokens else ""
+    return details
 
 
 def shell_quote(value: str) -> str:
@@ -325,6 +377,38 @@ class AdbDevice:
         # a directory is deleted only after its children are already gone.
         self._shell(f"rmdir {shell_quote(remote)}")
         return not self.exists(remote)
+
+    # -- installed applications -----------------------------------------------
+
+    def list_packages(self) -> list[str]:
+        """User-installed (third-party) packages; system apps are excluded."""
+
+        return parse_package_list(self._shell("pm list packages -3").stdout)
+
+    def package_apks(self, package: str) -> list[str]:
+        """On-device APK paths for a package (more than one when it is split)."""
+
+        return parse_package_paths(self._shell(f"pm path {shell_quote(package)}").stdout)
+
+    def package_details(self, package: str) -> dict[str, str]:
+        """Version and installer metadata for a package."""
+
+        return parse_package_details(self._shell(f"dumpsys package {shell_quote(package)}").stdout)
+
+    def install_apks(self, local_paths: list[Path]) -> bool:
+        """Install an app from local APK files, handling split APKs."""
+
+        if not local_paths:
+            return False
+        if len(local_paths) == 1:
+            args = ["install", "-r", str(local_paths[0])]
+        else:
+            args = ["install-multiple", "-r", *[str(path) for path in local_paths]]
+        if self._serial:
+            args = ["-s", self._serial, *args]
+        completed = self._client.run(args, check=False)
+        output = completed.stdout + completed.stderr
+        return completed.returncode == 0 and "Failure" not in output
 
 
 def make_device(client: AdbClient, serial: str | None) -> DeviceInterface:

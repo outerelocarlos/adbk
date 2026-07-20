@@ -25,6 +25,9 @@ class FakeDevice:
     ) -> None:
         self.files: dict[str, bytes] = {}
         self.dirs: set[str] = set()
+        self.package_apk_paths: dict[str, list[str]] = {}
+        self.package_meta: dict[str, dict[str, str]] = {}
+        self.installed_apks: list[list[Path]] = []
         self.unreadable: set[str] = set()
         self.list_errors: set[str] = set()  # readable, but listing fails
         self.mtimes: dict[str, int] = {}
@@ -48,6 +51,27 @@ class FakeDevice:
         self.mtimes[norm] = mtime
         if not readable:
             self.unreadable.add(norm)
+
+    def add_package(
+        self,
+        package: str,
+        *,
+        apks: tuple[str, ...] = (),
+        installer: str = "com.android.vending",
+        version_name: str = "1.0",
+        version_code: str = "1",
+    ) -> None:
+        """Register an installed app, creating its APK files so they can be pulled."""
+
+        paths = list(apks) or [f"/data/app/{package}/base.apk"]
+        for path in paths:
+            self.add_file(path, b"APK-" + package.encode())
+        self.package_apk_paths[package] = paths
+        self.package_meta[package] = {
+            "installerPackageName": installer,
+            "versionName": version_name,
+            "versionCode": version_code,
+        }
 
     def add_dir(self, path: str, *, readable: bool = True) -> None:
         norm = normalize_device_path(path)
@@ -173,3 +197,20 @@ class FakeDevice:
             return False  # rmdir refuses non-empty directories
         self.dirs.discard(norm)
         return norm not in self.dirs
+
+    # -- installed applications -----------------------------------------------
+
+    def list_packages(self) -> list[str]:
+        return sorted(self.package_apk_paths)
+
+    def package_apks(self, package: str) -> list[str]:
+        return list(self.package_apk_paths.get(package, []))
+
+    def package_details(self, package: str) -> dict[str, str]:
+        return dict(self.package_meta.get(package, {}))
+
+    def install_apks(self, local_paths: list[Path]) -> bool:
+        if not local_paths:
+            return False
+        self.installed_apks.append(list(local_paths))
+        return True
