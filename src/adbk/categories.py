@@ -140,7 +140,7 @@ DEFAULT_CATEGORIES: tuple[Category, ...] = (
     # game asset files under Android/obb. Selected by default (per "all selected
     # by default"); drill into it to deselect apps whose caches you don't want.
     Category(
-        "All app data (Android/data + obb)",
+        "Android/data + obb",
         ("/sdcard/Android/data", "/sdcard/Android/obb"),
         "Every app's Android/data (incl. caches for ~all apps) + Android/obb game files",
     ),

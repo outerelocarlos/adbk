@@ -14,6 +14,7 @@ This module has no I/O, so all of it is unit-tested directly.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from rich.text import Text
 
@@ -102,12 +103,23 @@ _UNICODE_BRANCHES = ("├─ ", "└─ ", "│  ", "   ")
 _ASCII_BRANCHES = ("|- ", "`- ", "|  ", "   ")
 
 
-def _annotate_text(label: str, node: TreeNode, label_style: str = "") -> Text:
-    text = Text(label, style=label_style)
-    # Folder totals come from `du`, so they cover sub-folders the tree does not
-    # expand. Files carry their own size on their line instead.
-    if node.entry_type is EntryType.DIRECTORY and node.size is not None:
-        text.append(f"   {human_size(node.size)}", style="dim")
+@dataclass
+class _Row:
+    """One line before layout: the label, its size, and any trailing notes.
+
+    Sizes are kept apart from the label so they can share one right-aligned
+    column across the whole tree, the way the selection screen lines them up.
+    """
+
+    head: Text
+    size: int | None = None
+    notes: Text | None = None
+
+
+def _notes(node: TreeNode) -> Text | None:
+    """Access state, warnings and exclusion markers, or None when there are none."""
+
+    text = Text()
     state = _STATE_LABEL.get(node.access_state)
     if state:
         text.append(f"  ({state})", style="yellow")
@@ -115,33 +127,63 @@ def _annotate_text(label: str, node: TreeNode, label_style: str = "") -> Text:
         text.append(f"  ({node.warning})", style="dim italic")
     if not node.included:
         text.append("  [excluded]", style="dim")
-    return text
+    return text if text.plain else None
+
+
+def _dir_size(node: TreeNode) -> int | None:
+    """A folder total, when one was measured (files carry their own size).
+
+    Nothing is shown for a folder we could not read: its state note says why,
+    and a number we could not verify would only mislead.
+    """
+
+    if node.entry_type is not EntryType.DIRECTORY:
+        return None
+    if node.access_state is not AccessState.READABLE:
+        return None
+    return node.size
+
+
+def _lay_out(rows: list[_Row]) -> list[Text]:
+    """Pad every label to the same width so the sizes form one column."""
+
+    head_width = max((len(row.head.plain) for row in rows), default=0)
+    size_width = max(
+        (len(human_size(row.size)) for row in rows if row.size is not None), default=0
+    )
+
+    lines: list[Text] = []
+    for row in rows:
+        line = row.head.copy()
+        if row.size is None and row.notes is None:
+            lines.append(line)  # nothing follows, so do not pad
+            continue
+        line.pad_right(head_width - len(row.head.plain))
+        if size_width:
+            if row.size is None:
+                line.append("  " + " " * size_width)
+            else:
+                line.append("  " + human_size(row.size).rjust(size_width), style="dim")
+        if row.notes is not None:
+            line.append_text(row.notes)
+        lines.append(line)
+    return lines
 
 
 def render_lines(node: TreeNode, *, ascii_only: bool = False) -> list[Text]:
-    """Render a directory tree with branch connectors and colour.
+    """Render a directory tree with branch connectors, colour and aligned sizes.
 
-    Folders are bold, connectors and file sizes are dim, folder summaries are
-    cyan, and access-state notes (empty/inaccessible/...) are yellow.
+    Folders are bold, connectors and sizes are dim, folder summaries are cyan,
+    and access-state notes (empty/inaccessible/...) are yellow.
     """
 
     branches = _ASCII_BRANCHES if ascii_only else _UNICODE_BRANCHES
     label, effective = collapse_chain(node)
-    root = Text()
-    root.append_text(_annotate_text(label, effective, label_style="bold"))
-    return [root, *_render_children(effective, "", branches)]
+    root = _Row(Text(label, style="bold"), _dir_size(effective), _notes(effective))
+    return _lay_out([root, *_collect_children(effective, "", branches)])
 
 
-def _file_line(prefix: str, branch: str, file_node: TreeNode) -> Text:
-    line = Text(prefix)
-    line.append(branch, style="dim")
-    line.append(file_node.name)
-    if file_node.size is not None:
-        line.append(f"   {human_size(file_node.size)}", style="dim")
-    return line
-
-
-def _render_children(effective: TreeNode, prefix: str, branches: tuple[str, ...]) -> list[Text]:
+def _collect_children(effective: TreeNode, prefix: str, branches: tuple[str, ...]) -> list[_Row]:
     if effective.access_state is not AccessState.READABLE:
         return []
 
@@ -156,34 +198,35 @@ def _render_children(effective: TreeNode, prefix: str, branches: tuple[str, ...]
     def branch(index: int) -> str:
         return elbow if index == total - 1 else tee
 
-    lines: list[Text] = []
+    rows: list[_Row] = []
     index = 0
     for file_node in listed_files:
-        lines.append(_file_line(prefix, branch(index), file_node))
+        head = Text(prefix)
+        head.append(branch(index), style="dim")
+        head.append(file_node.name)
+        rows.append(_Row(head, file_node.size))
         index += 1
     if show_summary:
-        total_bytes = sum(f.size or 0 for f in files)
         summary = f"{len(files)} files"
         if dirs:
             summary += f", {len(dirs)} subdirs"
-        summary += f", {human_size(total_bytes)}"
-        line = Text(prefix)
-        line.append(branch(index), style="dim")
-        line.append(f"[{summary}]", style="cyan")
-        lines.append(line)
+        head = Text(prefix)
+        head.append(branch(index), style="dim")
+        head.append(f"[{summary}]", style="cyan")
+        rows.append(_Row(head, sum(file.size or 0 for file in files)))
         index += 1
     for dir_node in dirs:
         last = index == total - 1
-        label, effective_child = collapse_chain(dir_node)
-        line = Text(prefix)
-        line.append(elbow if last else tee, style="dim")
-        line.append_text(_annotate_text(label, effective_child, label_style="bold"))
-        lines.append(line)
-        lines.extend(
-            _render_children(effective_child, prefix + (blank if last else vertical), branches)
+        label, child = collapse_chain(dir_node)
+        head = Text(prefix)
+        head.append(elbow if last else tee, style="dim")
+        head.append(label, style="bold")
+        rows.append(_Row(head, _dir_size(child), _notes(child)))
+        rows.extend(
+            _collect_children(child, prefix + (blank if last else vertical), branches)
         )
         index += 1
-    return lines
+    return rows
 
 
 def iter_included_files(node: TreeNode) -> Iterator[TreeNode]:

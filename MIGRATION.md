@@ -65,7 +65,7 @@ fully, keep all three pieces:
    ```
    (an app with split APKs prints several lines; pull each.)
 2. **OBB** - `/sdcard/Android/obb/<package>/` (large asset packs), captured by the
-   **All app data** category.
+   **Android/data + obb** category.
 3. **Save** - if it lives in private `/data/data`, it can't be file-copied without
    root. If the app has `ALLOW_BACKUP` and a low `targetSdk` (older games), the
    deprecated `adb backup` can still extract it:

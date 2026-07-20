@@ -152,5 +152,5 @@ def build_tree(
             )
 
     if too_wide:
-        node.warning = f"{subdir_count} subfolders (not expanded)"
+        node.warning = f"{subdir_count} subfolders, not expanded"
     return node
