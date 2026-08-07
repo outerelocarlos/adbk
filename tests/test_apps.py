@@ -5,7 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from adbk import apps
-from adbk.device import parse_package_details, parse_package_list, parse_package_paths
+from adbk.device import (
+    parse_package_details,
+    parse_package_installers,
+    parse_package_list,
+    parse_package_paths,
+)
 from adbk.manifest import AppRecord, Manifest, load_manifest
 from adbk.models import AppAvailability, DeviceIdentity, Operation, TransferMode
 from adbk.paths import logical_to_local
@@ -25,6 +30,19 @@ def test_parse_package_paths_keeps_splits_in_order() -> None:
         "/data/app/x/base.apk",
         "/data/app/x/split_config.arm64.apk",
     ]
+
+
+def test_parse_package_installers_maps_and_nulls() -> None:
+    output = (
+        "package:com.a  installer=com.android.vending\n"
+        "package:com.b  installer=null\n"
+        "package:com.c  installer=org.manager\n"
+    )
+    assert parse_package_installers(output) == {
+        "com.a": "com.android.vending",
+        "com.b": "",  # null becomes empty
+        "com.c": "org.manager",
+    }
 
 
 def test_parse_package_details_takes_the_first_token() -> None:
@@ -75,6 +93,37 @@ def test_wants_apk_rules() -> None:
     assert not apps.wants_apk(apps.PLAY_INSTALLER, "com.x", None, set())  # re-downloadable
     assert apps.wants_apk(apps.PLAY_INSTALLER, "com.x", False, set())  # delisted
     assert apps.wants_apk(apps.PLAY_INSTALLER, "com.x", None, {"com.x"})  # forced
+
+
+def test_wants_apk_recognizes_more_than_play() -> None:
+    # Other real stores are re-downloadable, not sideloads.
+    assert not apps.wants_apk("com.sec.android.app.samsungapps", "com.x", None, set())
+    # The system package installer means a genuine APK-file sideload.
+    assert apps.wants_apk("com.google.android.packageinstaller", "com.x", None, set())
+
+
+def test_wants_apk_skips_apps_managed_by_another_app() -> None:
+    installed = frozenset({"com.x", "org.manager"})
+    # com.x was installed by another app on the device, which can reinstall it.
+    assert not apps.wants_apk("org.manager", "com.x", None, set(), installed=installed)
+    # An installer that is not present on the device is unrecognized -> keep.
+    assert apps.wants_apk("org.gone", "com.x", None, set(), installed=installed)
+
+
+def test_apks_to_back_up_filters_the_installer_map() -> None:
+    installers = {
+        "com.play.app": "com.android.vending",       # store -> skip
+        "com.galaxy.app": "com.sec.android.app.samsungapps",  # store -> skip
+        "com.side.app": "null",                       # sideloaded -> keep
+        "com.file.app": "com.google.android.packageinstaller",  # sideloaded -> keep
+        "org.ext.manager": "com.google.android.packageinstaller",  # keep
+        "org.ext.plugin": "org.ext.manager",          # managed by the above -> skip
+    }
+    assert apps.apks_to_back_up(installers, forced=()) == [
+        "com.file.app", "com.side.app", "org.ext.manager",
+    ]
+    # Forcing a store app adds it back.
+    assert "com.play.app" in apps.apks_to_back_up(installers, forced=["com.play.app"])
 
 
 # --- Collection ---------------------------------------------------------------

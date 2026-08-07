@@ -210,6 +210,12 @@ class FakeDevice:
     def list_packages(self) -> list[str]:
         return sorted(self.package_apk_paths)
 
+    def list_packages_with_installer(self) -> dict[str, str]:
+        return {
+            package: self.package_meta.get(package, {}).get("installerPackageName", "")
+            for package in self.package_apk_paths
+        }
+
     def package_apks(self, package: str) -> list[str]:
         return list(self.package_apk_paths.get(package, []))
 

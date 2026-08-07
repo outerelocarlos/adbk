@@ -55,6 +55,7 @@ class DeviceInterface(Protocol):
     def delete_file(self, remote: str) -> bool: ...
     def delete_dir(self, remote: str) -> bool: ...
     def list_packages(self) -> list[str]: ...
+    def list_packages_with_installer(self) -> dict[str, str]: ...
     def package_apks(self, package: str) -> list[str]: ...
     def package_details(self, package: str) -> dict[str, str]: ...
     def install_apks(self, local_paths: list[Path]) -> bool: ...
@@ -176,6 +177,31 @@ def parse_package_paths(output: str) -> list[str]:
     """APK paths from ``pm path <package>`` (several lines when the app is split)."""
 
     return _package_prefixed(output)
+
+
+def parse_package_installers(output: str) -> dict[str, str]:
+    """Map package -> installer from ``pm list packages -i`` in one call.
+
+    Lines look like ``package:com.foo  installer=com.android.vending`` (the
+    installer is ``null`` for a genuine sideload).
+    """
+
+    installers: dict[str, str] = {}
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("package:"):
+            continue
+        tokens = stripped.split()
+        package = tokens[0][len("package:") :]
+        installer = ""
+        for token in tokens[1:]:
+            if token.startswith("installer="):
+                value = token[len("installer=") :]
+                installer = "" if value in ("null", "None") else value
+                break
+        if package:
+            installers[package] = installer
+    return installers
 
 
 _DETAIL_KEYS = ("versionName", "versionCode", "installerPackageName")
@@ -384,6 +410,11 @@ class AdbDevice:
         """User-installed (third-party) packages; system apps are excluded."""
 
         return parse_package_list(self._shell("pm list packages -3").stdout)
+
+    def list_packages_with_installer(self) -> dict[str, str]:
+        """Every third-party package mapped to its installer, in a single call."""
+
+        return parse_package_installers(self._shell("pm list packages -3 -i").stdout)
 
     def package_apks(self, package: str) -> list[str]:
         """On-device APK paths for a package (more than one when it is split)."""

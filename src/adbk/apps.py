@@ -32,7 +32,30 @@ from adbk.models import AppAvailability
 from adbk.paths import apk_relative_path, logical_to_local
 
 PLAY_INSTALLER = "com.android.vending"
-_NO_INSTALLER = {"", "null", "none"}
+
+# Installer package names that mean "re-downloadable from an app store", so the
+# APK is not worth keeping. More than just Play: phones ship other real stores.
+_KNOWN_STORES = frozenset({
+    PLAY_INSTALLER,                          # Google Play
+    "com.sec.android.app.samsungapps",       # Samsung Galaxy Store
+    "com.samsung.android.app.updatecenter",  # Samsung's own app updater
+    "com.amazon.venezia",                    # Amazon Appstore
+    "com.huawei.appmarket",                  # Huawei AppGallery
+    "com.xiaomi.market", "com.xiaomi.mipicks",  # Xiaomi GetApps
+    "com.heytap.market",                     # Oppo / realme
+    "com.bbk.appstore",                      # Vivo
+    "com.qihoo.appstore",
+    "com.facebook.system",                   # Meta app manager (Instagram, ...)
+})
+
+# The system component used when you tap an APK file: a genuine sideload, so the
+# APK is the only way back and is worth keeping.
+_SYSTEM_INSTALLERS = frozenset({
+    "com.android.packageinstaller",
+    "com.google.android.packageinstaller",
+})
+
+_NO_INSTALLER = frozenset({"", "null", "none"})
 _STORE_URL = "https://play.google.com/store/apps/details?id={package}&hl=en"
 _STORE_TIMEOUT = 5
 # Give up on the store check after this many unanswered lookups in a row, so a
@@ -41,9 +64,9 @@ _STORE_FAILURE_LIMIT = 5
 
 
 def from_store(installer: str) -> bool:
-    """Whether the app was installed by the app store."""
+    """Whether the app was installed by a recognized app store."""
 
-    return installer == PLAY_INSTALLER
+    return installer in _KNOWN_STORES
 
 
 def store_available(package: str) -> bool | None:
@@ -85,14 +108,50 @@ def classify(record: AppRecord, store_ok: bool | None) -> AppAvailability:
     return AppAvailability.UNKNOWN
 
 
-def wants_apk(installer: str, package: str, store_ok: bool | None, forced: set[str]) -> bool:
-    """Whether this app's APK should be pulled into the backup."""
+def wants_apk(
+    installer: str,
+    package: str,
+    store_ok: bool | None,
+    forced: set[str],
+    *,
+    installed: frozenset[str] = frozenset(),
+) -> bool:
+    """Whether this app's APK should be pulled into the backup.
+
+    Kept for apps we could not otherwise get back: sideloaded from a loose APK,
+    or with no recorded origin. Skipped for apps a store -- or another installed
+    app, such as an extension manager -- can reinstall.
+    """
 
     if package in forced:
         return True
     if store_ok is False:
-        return True  # confirmed gone from the store: keep it while we still can
-    return not from_store(installer)
+        return True  # the store confirms it is gone: keep it while we can
+    if store_ok is True:
+        return False
+    if installer in _KNOWN_STORES:
+        return False
+    if installer in _NO_INSTALLER or installer in _SYSTEM_INSTALLERS:
+        return True  # sideloaded from an APK file, or origin unknown
+    # Installed by another app here (which can reinstall it) -> skip; an
+    # unrecognized installer we keep, to be safe.
+    return installer not in installed
+
+
+def apks_to_back_up(installers: dict[str, str], forced: Iterable[str]) -> list[str]:
+    """Packages whose APK a backup would keep, from installer info alone.
+
+    This is the store-independent set (sideloaded apps and forced packages); the
+    optional store check adds delisted store apps on top during the backup.
+    """
+
+    forced_set = set(forced)
+    installed = frozenset(installers)
+    return sorted(
+        package
+        for package, installer in installers.items()
+        if wants_apk(installer, package, None, forced_set, installed=installed)
+    )
 
 
 def pull_apks(
@@ -128,6 +187,7 @@ def collect(
 
     forced = set(force_packages)
     packages = device.list_packages()
+    installed = frozenset(packages)
     records: list[AppRecord] = []
     store_enabled = check_store
     unanswered = 0
@@ -152,7 +212,9 @@ def collect(
             else:
                 unanswered = 0
 
-        if backup_root is not None and wants_apk(record.installer, package, store_ok, forced):
+        if backup_root is not None and wants_apk(
+            record.installer, package, store_ok, forced, installed=installed
+        ):
             record.apk_files = pull_apks(device, package, backup_root, serial)
 
         record.availability = classify(record, store_ok)
