@@ -67,9 +67,11 @@
 # installer, so list such packages here to always keep their APK. The backup also
 # asks whether to check the store (default yes), which detects them for you.
 #
-# Manga/anime reader extensions (Tachiyomi, Mihon, Aniyomi and forks) are never
-# kept as APKs: the reader's own backup reinstalls them from its extension repo.
-# Add "skip_apk" fnmatch patterns to exclude other in-app-reinstallable plugins.
+# Some APKs are never kept because a tool regenerates them rather than
+# distributing them: reader extensions (Tachiyomi/Mihon/Aniyomi, reinstalled from
+# the extension repo) and ReVanced patched apps (re-patched by ReVanced Manager).
+# Add "skip_apk" fnmatch patterns to exclude other in-app-reinstallable plugins;
+# use "force_apk" to override a skip and keep a specific APK anyway.
 #
 # [apps]
 # force_apk = ["com.example.delisted_game"]
