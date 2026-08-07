@@ -32,6 +32,9 @@ class AppConfig:
     # Packages whose APK is always kept, even if they came from the store (use
     # this for delisted apps that a store check would otherwise mark available).
     force_apk: tuple[str, ...] = field(default_factory=tuple)
+    # Package patterns whose APK is never kept (fnmatch), on top of the built-in
+    # skips for reader extensions. Use for other plugins reinstalled in-app.
+    skip_apk: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _as_path(value: object, field: str) -> Path | None:
@@ -92,6 +95,7 @@ def load_config(path: Path | None) -> AppConfig:
         ignore_dirs=_as_str_list(filters_table.get("ignore_dirs"), "filters.ignore_dirs"),
         ignore_files=_as_str_list(filters_table.get("ignore_files"), "filters.ignore_files"),
         force_apk=_as_str_list(apps_table.get("force_apk"), "apps.force_apk"),
+        skip_apk=_as_str_list(apps_table.get("skip_apk"), "apps.skip_apk"),
     )
 
 

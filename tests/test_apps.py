@@ -110,6 +110,26 @@ def test_wants_apk_skips_apps_managed_by_another_app() -> None:
     assert apps.wants_apk("org.gone", "com.x", None, set(), installed=installed)
 
 
+def test_is_reader_extension_matches_extensions_not_the_app() -> None:
+    assert apps.is_reader_extension("eu.kanade.tachiyomi.extension.en.mangafox")
+    assert apps.is_reader_extension("eu.kanade.tachiyomi.revived.all.batoto")
+    assert not apps.is_reader_extension("eu.kanade.tachiyomi.sy")  # the reader app itself
+
+
+def test_wants_apk_skips_reader_extensions() -> None:
+    # A sideloaded (installer=null) extension is still not kept: the app's own
+    # backup reinstalls it from the extension repo.
+    assert not apps.wants_apk("null", "eu.kanade.tachiyomi.extension.en.toonily", None, set())
+    # The reader app itself is still kept (sideloaded, not on a store).
+    assert apps.wants_apk("null", "eu.kanade.tachiyomi.sy", None, set())
+
+
+def test_wants_apk_honours_configured_skip_and_force() -> None:
+    assert not apps.wants_apk("null", "com.x.plugin", None, set(), skip=("com.x.*",))
+    # An explicit force wins over a skip pattern.
+    assert apps.wants_apk("null", "com.x.plugin", None, {"com.x.plugin"}, skip=("com.x.*",))
+
+
 def test_apks_to_back_up_filters_the_installer_map() -> None:
     installers = {
         "com.play.app": "com.android.vending",       # store -> skip
@@ -118,12 +138,15 @@ def test_apks_to_back_up_filters_the_installer_map() -> None:
         "com.file.app": "com.google.android.packageinstaller",  # sideloaded -> keep
         "org.ext.manager": "com.google.android.packageinstaller",  # keep
         "org.ext.plugin": "org.ext.manager",          # managed by the above -> skip
+        "eu.kanade.tachiyomi.extension.en.foo": "null",  # reader extension -> skip
     }
     assert apps.apks_to_back_up(installers, forced=()) == [
         "com.file.app", "com.side.app", "org.ext.manager",
     ]
     # Forcing a store app adds it back.
     assert "com.play.app" in apps.apks_to_back_up(installers, forced=["com.play.app"])
+    # A configured skip pattern removes more.
+    assert "com.file.app" not in apps.apks_to_back_up(installers, forced=(), skip=("com.file.*",))
 
 
 # --- Collection ---------------------------------------------------------------

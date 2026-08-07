@@ -318,6 +318,7 @@ def _run_backup(
             cancel=cancel,
             resume=resume,
             force_apk=config.force_apk,
+            skip_apk=config.skip_apk,
             check_store=_resolve_check_store(args),
         )
     finally:

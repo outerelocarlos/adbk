@@ -572,6 +572,7 @@ def _review_tree(
     kept_pairs: list[tuple[str, str]],
     *,
     force_apk: tuple[str, ...] = (),
+    skip_apk: tuple[str, ...] = (),
 ) -> None:
     """Optionally show the shallow tree of what will be backed up (display only)."""
 
@@ -612,11 +613,14 @@ def _review_tree(
             for line in treemod.render_lines(node, ascii_only=ascii_only):
                 console.print(line)
 
-    _review_apks(console, device, force_apk)
+    _review_apks(console, device, force_apk, skip_apk)
 
 
 def _review_apks(
-    console: Console, device: DeviceInterface, force_apk: tuple[str, ...]
+    console: Console,
+    device: DeviceInterface,
+    force_apk: tuple[str, ...],
+    skip_apk: tuple[str, ...],
 ) -> None:
     """List the app APKs that will be kept, so the review covers apps too."""
 
@@ -624,7 +628,7 @@ def _review_apks(
         installers = device.list_packages_with_installer()
     except DeviceAccessError:
         return
-    packages = apps.apks_to_back_up(installers, force_apk)
+    packages = apps.apks_to_back_up(installers, force_apk, skip_apk)
     if not packages:
         return
 
@@ -666,6 +670,7 @@ def run_backup(
     resume: bool = False,
     config_snapshot: dict[str, str] | None = None,
     force_apk: tuple[str, ...] = (),
+    skip_apk: tuple[str, ...] = (),
     check_store: bool | None = None,
 ) -> BackupOutcome:
     """Run a full backup (or a dry-run plan) against ``device``."""
@@ -708,7 +713,7 @@ def run_backup(
         mode = _select_mode(console, interactive=interactive)
 
     if interactive and kept_pairs:
-        _review_tree(console, device, kept_pairs, force_apk=force_apk)
+        _review_tree(console, device, kept_pairs, force_apk=force_apk, skip_apk=skip_apk)
 
     if dry_run:
         console.print(
@@ -739,7 +744,7 @@ def run_backup(
 
     _record_apps(
         device, manifest, backup_root, identity.serial, console,
-        force_apk=force_apk, check_store=check_store,
+        force_apk=force_apk, skip_apk=skip_apk, check_store=check_store,
         interactive=interactive, assume_yes=assume_yes,
     )
 
@@ -758,6 +763,7 @@ def _record_apps(
     console: Console,
     *,
     force_apk: tuple[str, ...],
+    skip_apk: tuple[str, ...],
     check_store: bool | None,
     interactive: bool,
     assume_yes: bool,
@@ -785,6 +791,7 @@ def _record_apps(
             serial=serial,
             backup_root=backup_root,
             force_packages=force_apk,
+            skip_patterns=skip_apk,
             check_store=check_store,
             on_progress=progress,
         )

@@ -20,6 +20,7 @@ without it, a package can also be forced into the APK set through configuration.
 
 from __future__ import annotations
 
+import fnmatch
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable
@@ -56,6 +57,21 @@ _SYSTEM_INSTALLERS = frozenset({
 })
 
 _NO_INSTALLER = frozenset({"", "null", "none"})
+
+# Package patterns whose APK is never worth keeping: manga/anime reader
+# "extensions" (Tachiyomi, Mihon, Aniyomi and forks) are plugins that the app
+# reinstalls from its own extension repo, so the app's backup already preserves
+# the source list -- keeping the extension APKs would be redundant bloat. The
+# reader apps themselves (e.g. ``eu.kanade.tachiyomi.sy``) do not match these and
+# are still kept, since they are sideloaded, not on a store.
+_READER_EXTENSION_PATTERNS = (
+    "*.tachiyomi.extension.*",
+    "*.tachiyomi.revived.*",
+    "*.tachiyomi.animeextension.*",
+    "*.aniyomi.extension.*",
+    "*.mihon.extension.*",
+)
+
 _STORE_URL = "https://play.google.com/store/apps/details?id={package}&hl=en"
 _STORE_TIMEOUT = 5
 # Give up on the store check after this many unanswered lookups in a row, so a
@@ -67,6 +83,18 @@ def from_store(installer: str) -> bool:
     """Whether the app was installed by a recognized app store."""
 
     return installer in _KNOWN_STORES
+
+
+def is_reader_extension(package: str) -> bool:
+    """Whether a package is a reader extension (a plugin reinstalled from a repo)."""
+
+    return any(fnmatch.fnmatch(package, pattern) for pattern in _READER_EXTENSION_PATTERNS)
+
+
+def _skips_apk(package: str, skip: tuple[str, ...]) -> bool:
+    """Whether the package's APK should be skipped (built-in or configured)."""
+
+    return is_reader_extension(package) or any(fnmatch.fnmatch(package, p) for p in skip)
 
 
 def store_available(package: str) -> bool | None:
@@ -115,16 +143,20 @@ def wants_apk(
     forced: set[str],
     *,
     installed: frozenset[str] = frozenset(),
+    skip: tuple[str, ...] = (),
 ) -> bool:
     """Whether this app's APK should be pulled into the backup.
 
     Kept for apps we could not otherwise get back: sideloaded from a loose APK,
     or with no recorded origin. Skipped for apps a store -- or another installed
-    app, such as an extension manager -- can reinstall.
+    app, such as an extension manager -- can reinstall, and for reader extensions
+    (and any configured ``skip`` patterns).
     """
 
     if package in forced:
-        return True
+        return True  # an explicit keep wins over any skip
+    if _skips_apk(package, skip):
+        return False
     if store_ok is False:
         return True  # the store confirms it is gone: keep it while we can
     if store_ok is True:
@@ -138,7 +170,9 @@ def wants_apk(
     return installer not in installed
 
 
-def apks_to_back_up(installers: dict[str, str], forced: Iterable[str]) -> list[str]:
+def apks_to_back_up(
+    installers: dict[str, str], forced: Iterable[str], skip: tuple[str, ...] = ()
+) -> list[str]:
     """Packages whose APK a backup would keep, from installer info alone.
 
     This is the store-independent set (sideloaded apps and forced packages); the
@@ -150,7 +184,7 @@ def apks_to_back_up(installers: dict[str, str], forced: Iterable[str]) -> list[s
     return sorted(
         package
         for package, installer in installers.items()
-        if wants_apk(installer, package, None, forced_set, installed=installed)
+        if wants_apk(installer, package, None, forced_set, installed=installed, skip=skip)
     )
 
 
@@ -176,6 +210,7 @@ def collect(
     serial: str,
     backup_root: Path | None = None,
     force_packages: Iterable[str] = (),
+    skip_patterns: tuple[str, ...] = (),
     check_store: bool = False,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> list[AppRecord]:
@@ -213,7 +248,8 @@ def collect(
                 unanswered = 0
 
         if backup_root is not None and wants_apk(
-            record.installer, package, store_ok, forced, installed=installed
+            record.installer, package, store_ok, forced,
+            installed=installed, skip=skip_patterns,
         ):
             record.apk_files = pull_apks(device, package, backup_root, serial)
 

@@ -89,7 +89,7 @@ databases live in private storage. Use each app's own export/transfer:
 | **Signal** | the exported `.backup` (once you create it) | Settings -> Chats -> **Chat backups**; note the passphrase |
 | **Launcher (e.g. Nova)** | the exported backup file on shared storage | make a fresh backup in the launcher's settings before switching |
 | **Telegram** | `Android/data/org.telegram.messenger` / Telegram X media | account-based; chats re-sync on login |
-| **Manga reader (Tachiyomi/Mihon)** | `Tachiyomi/backup/*.proto.gz` + downloads | restore the `.proto.gz` in-app on the new device |
+| **Manga reader (Tachiyomi/Mihon)** | the `.tachibk`/`.proto.gz` backup (under `Tachiyomi/`) + downloads | install the reader, restore the backup in-app; it reinstalls the sources/extensions from their repo (extension APKs are deliberately not kept) |
 | **Authenticator / 2FA** | nothing - seeds are in private storage | **before wiping the old phone**, use the app's **Transfer accounts -> Export** and scan the QR on the new phone (lose this and you lose your 2FA) |
 | **File manager (e.g. MiXplorer)** | its config folder on `/sdcard` (bookmarks, themes) | copy the folder back |
 
