@@ -333,6 +333,30 @@ def test_find_latest_backup_accepts_a_direct_backup_dir(tmp_path: Path) -> None:
     assert workflow.find_latest_backup(tmp_path) == tmp_path
 
 
+def test_backup_date_parses_dated_dirs(tmp_path: Path) -> None:
+    assert workflow.backup_date(tmp_path / "2026-08-07") == date(2026, 8, 7)
+    assert workflow.backup_date(tmp_path / "2026-08-07-2") == date(2026, 8, 7)  # same-day suffix
+    assert workflow.backup_date(tmp_path / "notadate") is None
+
+
+def test_describe_age_phrasing() -> None:
+    assert workflow.describe_age(0) == "earlier today"
+    assert workflow.describe_age(1) == "yesterday"
+    assert workflow.describe_age(9) == "9 days ago"
+
+
+def test_existing_backup_notice_reports_age(tmp_path: Path) -> None:
+    assert workflow.existing_backup_notice(tmp_path) is None  # nothing there yet
+
+    _write_manifest(tmp_path / "2026-08-01")
+    _write_manifest(tmp_path / "2026-08-05")  # newer; this is the one reported
+    notice = workflow.existing_backup_notice(tmp_path, today=date(2026, 8, 7))
+    assert notice is not None
+    path, when = notice
+    assert path == tmp_path / "2026-08-05"
+    assert when == "2 days ago"
+
+
 def _group(name: str, *sizes: int) -> workflow.RestoreGroup:
     entries = [
         ManifestEntry(f"/storage/emulated/0/{name}/{i}", f"l/{name}/{i}", EntryType.FILE, size=size)

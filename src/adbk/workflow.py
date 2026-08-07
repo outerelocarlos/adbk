@@ -107,6 +107,45 @@ def find_latest_backup(root: Path) -> Path | None:
     return dated[-1] if dated else None
 
 
+def backup_date(backup_dir: Path) -> date | None:
+    """The date a dated backup directory records, parsed from its name.
+
+    ``2026-08-07`` and same-day reruns like ``2026-08-07-2`` both read as that
+    day; anything that is not a dated directory returns ``None``.
+    """
+
+    try:
+        return date.fromisoformat(backup_dir.name[:10])
+    except ValueError:
+        return None
+
+
+def describe_age(days: int) -> str:
+    """A human phrase for how long ago a backup was made."""
+
+    if days <= 0:
+        return "earlier today"
+    if days == 1:
+        return "yesterday"
+    return f"{days} days ago"
+
+
+def existing_backup_notice(root: Path, *, today: date | None = None) -> tuple[Path, str] | None:
+    """If a backup already exists under ``root``, its path and a human age phrase.
+
+    ``None`` when the root holds no backup yet, so the caller only warns when
+    there is genuinely something already there.
+    """
+
+    existing = find_latest_backup(root)
+    if existing is None:
+        return None
+    made = backup_date(existing)
+    if made is None:
+        return existing, "previously"
+    return existing, describe_age(((today or date.today()) - made).days)
+
+
 @dataclass
 class BackupOutcome:
     state: ManifestState

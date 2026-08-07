@@ -26,7 +26,13 @@ from adbk.doctor import gather, render
 from adbk.errors import AndroidBackupError, DeviceError
 from adbk.models import ConflictPolicy, TransferMode
 from adbk.transfer import CancellationToken
-from adbk.workflow import find_latest_backup, next_backup_dir, run_backup, run_restore
+from adbk.workflow import (
+    existing_backup_notice,
+    find_latest_backup,
+    next_backup_dir,
+    run_backup,
+    run_restore,
+)
 
 _CONFLICT_CHOICES: dict[str, ConflictPolicy] = {
     "skip-identical": ConflictPolicy.SKIP_IDENTICAL,
@@ -272,6 +278,23 @@ def _run_backup(
     root = _resolve_backup_dir(args, config)
     mode = _resolve_mode(args)
     resume = bool(getattr(args, "resume", False))
+
+    # A fresh backup: warn if the folder already holds one (any dated run), so a
+    # forgotten earlier backup is never silently duplicated. Resume expects one,
+    # and a dry run creates nothing, so neither asks.
+    if not resume and not options.dry_run:
+        notice = existing_backup_notice(root)
+        if notice is not None:
+            existing, when = notice
+            if not ui.confirm(
+                console,
+                f"A previous backup was found, made {when} "
+                f"({ps.display_path(existing)}). Start a new backup anyway?",
+                assume_yes=options.assume_yes, interactive=interactive, default=True,
+            ):
+                console.print("Backup cancelled; the existing one was left untouched.")
+                return 0
+
     device = _open_device(options, console, interactive)
 
     if resume:
