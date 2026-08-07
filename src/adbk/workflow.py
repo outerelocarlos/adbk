@@ -567,7 +567,11 @@ def annotate_dir_sizes(node: TreeNode, sizes: dict[str, int]) -> None:
 
 
 def _review_tree(
-    console: Console, device: DeviceInterface, kept_pairs: list[tuple[str, str]]
+    console: Console,
+    device: DeviceInterface,
+    kept_pairs: list[tuple[str, str]],
+    *,
+    force_apk: tuple[str, ...] = (),
 ) -> None:
     """Optionally show the shallow tree of what will be backed up (display only)."""
 
@@ -607,6 +611,34 @@ def _review_tree(
         for node in nodes:
             for line in treemod.render_lines(node, ascii_only=ascii_only):
                 console.print(line)
+
+    _review_apks(console, device, force_apk)
+
+
+def _review_apks(
+    console: Console, device: DeviceInterface, force_apk: tuple[str, ...]
+) -> None:
+    """List the app APKs that will be kept, so the review covers apps too."""
+
+    try:
+        installers = device.list_packages_with_installer()
+    except DeviceAccessError:
+        return
+    packages = apps.apks_to_back_up(installers, force_apk)
+    if not packages:
+        return
+
+    console.print(Text(f"\nApp APKs to keep: {len(packages)}", style="bold"))
+    for package in packages[:_APP_LIST_LIMIT]:
+        console.print(f"  {package}")
+    remaining = len(packages) - _APP_LIST_LIMIT
+    if remaining > 0:
+        console.print(Text(f"  ... and {remaining} more", style="cyan"))
+    console.print(Text(
+        "  (these are sideloaded apps; store apps reinstall themselves, and the "
+        "store check adds any delisted ones)",
+        style="dim",
+    ))
 
 
 # --- Skips --------------------------------------------------------------------
@@ -676,7 +708,7 @@ def run_backup(
         mode = _select_mode(console, interactive=interactive)
 
     if interactive and kept_pairs:
-        _review_tree(console, device, kept_pairs)
+        _review_tree(console, device, kept_pairs, force_apk=force_apk)
 
     if dry_run:
         console.print(
