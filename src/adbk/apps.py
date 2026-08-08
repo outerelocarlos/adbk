@@ -172,17 +172,19 @@ def wants_apk(
         return True  # an explicit keep wins over any skip
     if _skips_apk(package, skip):
         return False
-    if store_ok is False:
-        return True  # the store confirms it is gone: keep it while we can
-    if store_ok is True:
-        return False
+
+    # Decide from the installer first -- those signals are offline and reliable.
+    # The store check only knows Google Play, so it is used solely for apps that
+    # actually came from Play (is it delisted?) or whose origin is unknown.
+    if installer == PLAY_INSTALLER:
+        return store_ok is False  # keep only when the store confirms it is gone
     if installer in _KNOWN_STORES:
-        return False
-    if installer in _NO_INSTALLER or installer in _SYSTEM_INSTALLERS:
-        return True  # sideloaded from an APK file, or origin unknown
-    # Installed by another app here (which can reinstall it) -> skip; an
-    # unrecognized installer we keep, to be safe.
-    return installer not in installed
+        return False  # another real store reinstalls it
+    if installer and installer in installed:
+        return False  # another installed app (extension/patch manager) reinstalls it
+    # Sideloaded from an APK, or an installer not present on the device: keep,
+    # unless the Play check happened to find it there.
+    return store_ok is not True
 
 
 def apks_to_back_up(
