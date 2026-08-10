@@ -15,6 +15,7 @@ an in-memory fake device.
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path, PurePosixPath
@@ -1148,6 +1149,51 @@ def _print_app_list(console: Console, heading: str, records: list[AppRecord]) ->
         console.print(Text(f"    ... and {remaining} more", style="cyan"))
 
 
+def app_data_entries(manifest: Manifest, package: str) -> set[str]:
+    """Local paths of a package's Android/data and Android/obb files in the backup."""
+
+    prefixes = tuple(
+        f"{paths.CANONICAL_SHARED_ROOT}/Android/{sub}/{package}/" for sub in ("data", "obb")
+    )
+    return {
+        entry.local_relative_path
+        for entry in manifest.entries.values()
+        if entry.entry_type is EntryType.FILE and entry.android_path.startswith(prefixes)
+    }
+
+
+def repush_app_data(
+    device: DeviceInterface,
+    manifest: Manifest,
+    backup_root: Path,
+    packages: Iterable[str],
+    console: Console,
+    *,
+    cancel: CancellationToken | None = None,
+) -> int:
+    """Re-push each app's Android/data (and obb) from the backup, after install.
+
+    Installing an app wipes its own Android/data, so a save restored earlier is
+    lost. This puts it back -- force-stopping the app first, then overwriting
+    whatever the fresh install created. Returns the number of files restored.
+    """
+
+    total = 0
+    for package in packages:
+        only = app_data_entries(manifest, package)
+        if not only:
+            console.print(Text(f"  {package}: no saved data in the backup", style="dim"))
+            continue
+        device.force_stop(package)
+        summary = run_restore_files(
+            device, manifest, backup_root,
+            policy=ConflictPolicy.ALWAYS_OVERWRITE, only=only, cancel=cancel,
+        )
+        total += len(summary.restored)
+        console.print(f"  {package}: re-pushed {len(summary.restored)} file(s)")
+    return total
+
+
 def _restore_apps(
     device: DeviceInterface,
     manifest: Manifest,
@@ -1178,15 +1224,21 @@ def _restore_apps(
     ):
         installed = 0
         failed = 0
+        installed_packages: list[str] = []
         for record in from_backup:
             local = [paths.logical_to_local(backup_root, rel) for rel in record.apk_files]
             present = [path for path in local if path.is_file()]
             if present and device.install_apks(present):
                 installed += 1
+                installed_packages.append(record.package)
             else:
                 failed += 1
                 console.print(Text(f"    failed: {record.package}", style="yellow"))
         console.print(f"  Installed {installed}, failed {failed}.")
+        # Installing wiped each app's Android/data, so restore the saves now.
+        if installed_packages:
+            console.print("  Restoring app data (so saves survive the install) ...")
+            repush_app_data(device, manifest, backup_root, installed_packages, console)
 
     if from_store:
         _print_app_list(console, "Reinstall these from the store:", from_store)

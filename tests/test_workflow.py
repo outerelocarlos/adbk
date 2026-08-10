@@ -9,8 +9,15 @@ import pytest
 from rich.console import Console
 
 from adbk import ui, workflow
-from adbk.manifest import MANIFEST_FILENAME, ManifestEntry, load_manifest
-from adbk.models import Category, EntryType, ManifestState, TransferMode
+from adbk.manifest import MANIFEST_FILENAME, Manifest, ManifestEntry, load_manifest
+from adbk.models import (
+    Category,
+    DeviceIdentity,
+    EntryType,
+    ManifestState,
+    Operation,
+    TransferMode,
+)
 from tests.fakedevice import FakeDevice
 
 
@@ -300,6 +307,40 @@ def test_common_parent_ignores_the_shared_storage_root() -> None:
 
 def test_common_parent_needs_more_than_one_root() -> None:
     assert workflow.common_parent(["/storage/emulated/0/Android/data"]) is None
+
+
+# --- Re-pushing app data (save-order fix) --------------------------------------
+
+
+def test_app_data_entries_matches_only_that_package() -> None:
+    m = Manifest(Operation.BACKUP, TransferMode.COPY, DeviceIdentity("S"))
+    for path in (
+        "/storage/emulated/0/Android/data/com.game/files/save.dat",
+        "/storage/emulated/0/Android/obb/com.game/main.obb",
+        "/storage/emulated/0/Android/data/com.other/files/x",
+        "/storage/emulated/0/DCIM/a.jpg",
+    ):
+        m.upsert(ManifestEntry(path, path.replace("/storage/emulated/0/", "l/"), EntryType.FILE))
+    entries = workflow.app_data_entries(m, "com.game")
+    assert entries == {"l/Android/data/com.game/files/save.dat", "l/Android/obb/com.game/main.obb"}
+
+
+def test_repush_app_data_force_stops_and_restores(tmp_path: Path) -> None:
+    device = FakeDevice(serial="OLD")
+    device.add_package("com.game", installer="null")  # sideloaded
+    device.add_file("/sdcard/Android/data/com.game/files/save.dat", b"SAVE")
+    workflow.run_backup(
+        device, backup_root=tmp_path,
+        categories=[Category("Apps", ("/sdcard/Android/data",))],
+        mode=TransferMode.COPY, console=_console(), assume_yes=True, check_store=False,
+    )
+    manifest = load_manifest(tmp_path / MANIFEST_FILENAME)
+
+    target = FakeDevice(serial="NEW")
+    restored = workflow.repush_app_data(target, manifest, tmp_path, ["com.game"], _console())
+    assert restored == 1
+    assert "com.game" in target.force_stopped  # stopped before the push
+    assert target.files["/storage/emulated/0/Android/data/com.game/files/save.dat"] == b"SAVE"
 
 
 # --- Dated backup directories -------------------------------------------------

@@ -59,6 +59,8 @@ class DeviceInterface(Protocol):
     def package_apks(self, package: str) -> list[str]: ...
     def package_details(self, package: str) -> dict[str, str]: ...
     def install_apks(self, local_paths: list[Path]) -> bool: ...
+    def force_stop(self, package: str) -> None: ...
+    def open_app_listing(self, package: str) -> None: ...
 
 
 def _parse_entry_line(line: str) -> RawEntry | None:
@@ -440,6 +442,19 @@ class AdbDevice:
         completed = self._client.run(args, check=False)
         output = completed.stdout + completed.stderr
         return completed.returncode == 0 and "Failure" not in output
+
+    def force_stop(self, package: str) -> None:
+        """Stop the app so it does not overwrite data we are about to push back."""
+
+        self._shell(f"am force-stop {shell_quote(package)}")
+
+    def open_app_listing(self, package: str) -> None:
+        """Open the app's store page on the device (for a one-tap reinstall)."""
+
+        self._shell(
+            "am start -a android.intent.action.VIEW "
+            f"-d {shell_quote('market://details?id=' + package)}"
+        )
 
 
 def make_device(client: AdbClient, serial: str | None) -> DeviceInterface:

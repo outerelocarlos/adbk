@@ -28,6 +28,8 @@ class FakeDevice:
         self.package_apk_paths: dict[str, list[str]] = {}
         self.package_meta: dict[str, dict[str, str]] = {}
         self.installed_apks: list[list[Path]] = []
+        self.force_stopped: list[str] = []
+        self.opened_listings: list[str] = []
         self.unreadable: set[str] = set()
         self.list_errors: set[str] = set()  # readable, but listing fails
         self.mtimes: dict[str, int] = {}
@@ -227,3 +229,9 @@ class FakeDevice:
             return False
         self.installed_apks.append(list(local_paths))
         return True
+
+    def force_stop(self, package: str) -> None:
+        self.force_stopped.append(package)
+
+    def open_app_listing(self, package: str) -> None:
+        self.opened_listings.append(package)

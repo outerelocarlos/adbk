@@ -24,12 +24,14 @@ from adbk.config import AppConfig, effective_categories, load_config
 from adbk.device import AdbDevice, DeviceInterface
 from adbk.doctor import gather, render
 from adbk.errors import AndroidBackupError, DeviceError
+from adbk.manifest import MANIFEST_FILENAME, load_manifest
 from adbk.models import ConflictPolicy, TransferMode
 from adbk.transfer import CancellationToken
 from adbk.workflow import (
     existing_backup_notice,
     find_latest_backup,
     next_backup_dir,
+    repush_app_data,
     run_backup,
     run_restore,
 )
@@ -110,6 +112,14 @@ def build_parser() -> argparse.ArgumentParser:
     restore.add_argument("--conflict", choices=sorted(_CONFLICT_CHOICES), metavar="POLICY",
                          help="Conflict policy: " + ", ".join(sorted(_CONFLICT_CHOICES)) +
                               " (default: skip identical, ask about different).")
+
+    appdata = subparsers.add_parser(
+        "restore-appdata", parents=[common],
+        help="Re-push an app's saved data from the backup, after you reinstall the app.",
+    )
+    appdata.add_argument("package", nargs="+", help="Package name(s) to restore data for.")
+    appdata.add_argument("--manifest", type=Path, metavar="PATH",
+                         help="Manifest to read (default: newest under the backup dir).")
     return parser
 
 
@@ -193,6 +203,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_backup(args, options, config, console, interactive)
         if command == "restore":
             return _run_restore(args, options, config, console, interactive)
+        if command == "restore-appdata":
+            return _run_restore_appdata(args, options, config, console, interactive)
 
         parser.print_help()
         return 0
@@ -367,3 +379,40 @@ def _run_restore(
         )
     finally:
         uninstall()
+
+
+def _run_restore_appdata(
+    args: argparse.Namespace,
+    options: AdbOptions,
+    config: AppConfig,
+    console: Console,
+    interactive: bool,
+) -> int:
+    root = _resolve_backup_dir(args, config)
+    manifest_arg = getattr(args, "manifest", None)
+    if manifest_arg is not None:
+        manifest_path = Path(manifest_arg)
+    else:
+        found = find_latest_backup(root)
+        if found is None:
+            raise AndroidBackupError(
+                f"No backup found under {ps.display_path(root)}. Pass --manifest."
+            )
+        manifest_path = found / MANIFEST_FILENAME
+    manifest = load_manifest(manifest_path)
+    device = _open_device(options, console, interactive)
+
+    console.print(
+        "Re-pushing app data from the backup. Reinstall each app first, then this "
+        "restores its save over the fresh install."
+    )
+    cancel = CancellationToken()
+    uninstall = ps.install_interrupt_handler(cancel.request)
+    try:
+        restored = repush_app_data(
+            device, manifest, manifest_path.parent, args.package, console, cancel=cancel,
+        )
+    finally:
+        uninstall()
+    console.print(f"Done: re-pushed {restored} file(s).")
+    return 0
