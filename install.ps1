@@ -12,16 +12,38 @@ $ErrorActionPreference = 'Stop'
 function Info($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Warn($m) { Write-Host "==> $m" -ForegroundColor Yellow }
 
+function Resolve-Uv {
+    # Full path to uv.exe if it can be found, else '' (do not trust the session PATH).
+    $cmd = Get-Command uv -CommandType Application -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    foreach ($dir in @("$env:USERPROFILE\.local\bin", "$env:LOCALAPPDATA\uv\bin",
+                       "$env:USERPROFILE\.cargo\bin")) {
+        $exe = Join-Path $dir 'uv.exe'
+        if (Test-Path $exe) { return $exe }
+    }
+    return ''
+}
+
 Info "Installing adbk"
 
 # 1. Ensure uv is available (it manages an isolated Python and tool installs).
-if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+$uv = Resolve-Uv
+if (-not $uv) {
     Warn "uv not found; installing uv (Astral)"
-    Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
-    # uv installs to %USERPROFILE%\.local\bin; use it in this session.
-    $uvBin = Join-Path $env:USERPROFILE '.local\bin'
-    if (Test-Path $uvBin) { $env:Path = "$uvBin;$env:Path" }
+    # Run uv's installer in a CHILD process: it calls `exit`, which would close
+    # this window when the one-liner is run through `irm | iex`.
+    & powershell -NoProfile -ExecutionPolicy Bypass -Command `
+        "Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression"
+    $uv = Resolve-Uv
 }
+if (-not $uv) {
+    Warn "Could not locate uv after installing it. Open a NEW terminal and re-run"
+    Warn "this command, or install uv from https://astral.sh/uv first."
+    return
+}
+# Make uv (and the tools it installs) reachable in THIS session too.
+$uvDir = Split-Path $uv -Parent
+if ($uvDir -and (Test-Path $uvDir)) { $env:Path = "$uvDir;$env:Path" }
 
 # 2. Install the CLI. Prefer PyPI; fall back to installing from GitHub so the
 #    one-liner also works before the first PyPI release is published.

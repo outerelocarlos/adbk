@@ -12,14 +12,31 @@ set -eu
 
 info() { printf '==> %s\n' "$1"; }
 
+# Full path to uv if it can be found (do not trust the session PATH alone).
+resolve_uv() {
+    if command -v uv >/dev/null 2>&1; then command -v uv; return 0; fi
+    for d in "$HOME/.local/bin" "$HOME/.cargo/bin" "${XDG_BIN_HOME:-}"; do
+        if [ -n "$d" ] && [ -x "$d/uv" ]; then printf '%s\n' "$d/uv"; return 0; fi
+    done
+    return 1
+}
+
 info "Installing adbk"
 
 # 1. Ensure uv is available (it manages an isolated Python and tool installs).
-if ! command -v uv >/dev/null 2>&1; then
+UV="$(resolve_uv || true)"
+if [ -z "$UV" ]; then
     info "uv not found; installing uv (Astral)"
     curl -fsSL https://astral.sh/uv/install.sh | sh
-    # uv installs to ~/.local/bin; use it in this session.
-    export PATH="$HOME/.local/bin:$PATH"
+    # The installer drops an env file that adds uv to PATH; use it, plus fallbacks.
+    [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+    UV="$(resolve_uv || true)"
+fi
+if [ -z "$UV" ]; then
+    info "Could not locate uv after installing it. Open a NEW terminal and re-run,"
+    info "or install uv from https://astral.sh/uv first."
+    exit 1
 fi
 
 # 2. Install the CLI. Prefer PyPI; fall back to installing from GitHub so the
