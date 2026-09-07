@@ -22,6 +22,36 @@ PRIVATE_ROOTS = ("/data/data", "/data/user/0", "/data/user_de/0")
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
+# Characters that are illegal in a path component on Windows (plus control
+# codes). Android names such as "process-com.xiaomi.account:accountservice" are
+# valid on the device but break mkdir on Windows, so the local copy maps them to
+# "_". The manifest keeps the original android_path, so restore still targets the
+# real device location.
+_ILLEGAL_COMPONENT = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_TRAILING_DOTS_SPACES = re.compile(r"[ .]+$")
+_WINDOWS_RESERVED = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{i}" for i in range(1, 10)}
+    | {f"lpt{i}" for i in range(1, 10)}
+)
+
+
+def _sanitize_component(name: str) -> str:
+    """Make one path segment a safe file/directory name on any OS.
+
+    Deterministic, so a name round-trips identically for resume and restore:
+    illegal characters become "_", trailing dots/spaces (which Windows silently
+    drops) become "_", and the reserved device names are prefixed with "_".
+    """
+
+    cleaned = _ILLEGAL_COMPONENT.sub("_", name)
+    cleaned = _TRAILING_DOTS_SPACES.sub(lambda match: "_" * len(match.group()), cleaned)
+    if not cleaned:
+        return "_"
+    if cleaned.split(".", 1)[0].lower() in _WINDOWS_RESERVED:
+        cleaned = "_" + cleaned
+    return cleaned
+
 
 def normalize_device_path(path: str) -> str:
     """Normalize an Android path: collapse slashes, drop trailing slash, alias sdcard.
@@ -102,8 +132,7 @@ def logical_relative_path(serial: str, android_path: str) -> str:
         section = "other"
 
     parts = ["devices", safe_serial, section]
-    if rest:
-        parts.append(rest)
+    parts.extend(_sanitize_component(segment) for segment in rest.split("/") if segment)
     return "/".join(parts)
 
 
@@ -114,8 +143,10 @@ def apk_relative_path(serial: str, package: str, apk_path: str) -> str:
     apart (``base.apk``, ``split_config.arm64_v8a.apk``, ...).
     """
 
-    filename = PurePosixPath(apk_path).name or "base.apk"
-    return "/".join(["devices", sanitize_serial(serial), "apks", package, filename])
+    filename = _sanitize_component(PurePosixPath(apk_path).name or "base.apk")
+    return "/".join(
+        ["devices", sanitize_serial(serial), "apks", _sanitize_component(package), filename]
+    )
 
 
 def drop_nested_paths(paths: Iterable[str]) -> list[str]:

@@ -40,6 +40,29 @@ def test_logical_handles_spaces_and_unicode() -> None:
     assert logical == "devices/S/shared-storage/Mis Cosas/José Álvarez.txt"
 
 
+def test_logical_relative_sanitizes_illegal_windows_characters() -> None:
+    # The ':' in a Xiaomi dump dir is legal on Android but breaks mkdir on Windows.
+    logical = paths.logical_relative_path(
+        "S",
+        "/sdcard/Android/data/com.xiaomi.account/files/dump/process-com.xiaomi:accountservice/0",
+    )
+    assert ":" not in logical
+    assert logical.endswith("process-com.xiaomi_accountservice/0")
+
+
+def test_sanitize_component_rules() -> None:
+    assert paths._sanitize_component('a:b*c?"') == "a_b_c__"
+    assert paths._sanitize_component("trailing. ") == "trailing__"  # dot+space -> "__"
+    assert paths._sanitize_component("CON").startswith("_")  # reserved device name
+    assert paths._sanitize_component("normal.dat") == "normal.dat"  # untouched
+
+
+def test_apk_relative_path_sanitizes() -> None:
+    assert paths.apk_relative_path("S", "com.x", "/data/app/base.apk") == (
+        "devices/S/apks/com.x/base.apk"
+    )
+
+
 def test_drop_nested_paths_keeps_ancestors() -> None:
     kept = paths.drop_nested_paths([
         "/sdcard/Android/data",
