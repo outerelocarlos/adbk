@@ -45,23 +45,28 @@ if (-not $uv) {
 $uvDir = Split-Path $uv -Parent
 if ($uvDir -and (Test-Path $uvDir)) { $env:Path = "$uvDir;$env:Path" }
 
-# 2. Install the CLI. Prefer PyPI; fall back to installing from GitHub so the
-#    one-liner also works before the first PyPI release is published.
-$pkg = 'adbk'
+# 2. Install the CLI with uv's full path -- do not depend on the session PATH.
+#    Prefer PyPI; fall back to GitHub so this works before the first PyPI release.
 $repo = 'git+https://github.com/outerelocarlos/adbk'
 Info "Installing the adbk CLI with uv"
-try {
-    uv tool install --python 3.12 --force $pkg
-    if ($LASTEXITCODE -ne 0) { throw "uv tool install $pkg exited $LASTEXITCODE" }
-} catch {
+& $uv tool install --python 3.12 --force adbk
+if ($LASTEXITCODE -ne 0) {
     Warn "PyPI install unavailable; installing from GitHub instead"
-    uv tool install --python 3.12 --force $repo
+    & $uv tool install --python 3.12 --force $repo
+    if ($LASTEXITCODE -ne 0) { Warn "Installing adbk failed; see the output above."; return }
 }
 
-# 3. Put uv's tool bin on PATH for future terminals.
-uv tool update-shell
+# 3. Put uv's tool bin on PATH -- persistently, and in this session so `adbk`
+#    works right away instead of needing `uv run adbk`.
+& $uv tool update-shell
+$toolBin = Join-Path $env:USERPROFILE '.local\bin'
+if (Test-Path $toolBin) { $env:Path = "$toolBin;$env:Path" }
 
 Write-Host ''
-Write-Host 'Done. Open a NEW terminal, then run:' -ForegroundColor Green
+if (Get-Command adbk -CommandType Application -ErrorAction SilentlyContinue) {
+    Write-Host 'Done. adbk is installed and ready in this terminal:' -ForegroundColor Green
+} else {
+    Write-Host 'Done. Open a NEW terminal (so adbk is on PATH), then run:' -ForegroundColor Green
+}
 Write-Host '    adbk doctor      # check the environment and set up ADB'
 Write-Host '    adbk backup      # back up the connected phone'

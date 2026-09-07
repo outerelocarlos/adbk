@@ -39,19 +39,25 @@ if [ -z "$UV" ]; then
     exit 1
 fi
 
-# 2. Install the CLI. Prefer PyPI; fall back to installing from GitHub so the
-#    one-liner also works before the first PyPI release is published.
+# 2. Install the CLI with uv's full path -- do not depend on the session PATH.
+#    Prefer PyPI; fall back to GitHub so this works before the first PyPI release.
 info "Installing the adbk CLI with uv"
-if ! uv tool install --python 3.12 --force adbk; then
+if ! "$UV" tool install --python 3.12 --force adbk; then
     info "PyPI install unavailable; installing from GitHub instead"
-    uv tool install --python 3.12 --force \
+    "$UV" tool install --python 3.12 --force \
         "git+https://github.com/outerelocarlos/adbk"
 fi
 
-# 3. Put uv's tool bin on PATH for future shells.
-uv tool update-shell || true
+# 3. Put uv's tool bin on PATH -- persistently, and in this shell so `adbk`
+#    works right away instead of needing `uv run adbk`.
+"$UV" tool update-shell || true
+export PATH="$HOME/.local/bin:$PATH"
 
 printf '\n'
-printf 'Done. Open a NEW terminal, then run:\n'
+if command -v adbk >/dev/null 2>&1; then
+    printf 'Done. adbk is installed and ready in this shell:\n'
+else
+    printf 'Done. Open a NEW terminal (so adbk is on PATH), then run:\n'
+fi
 printf '    adbk doctor      # check the environment and set up ADB\n'
 printf '    adbk backup      # back up the connected phone\n'
