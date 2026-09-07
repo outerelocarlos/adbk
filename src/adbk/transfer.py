@@ -148,7 +148,13 @@ def entry_satisfied(entry: ManifestEntry, backup_root: Path) -> bool:
     if entry.copy_result is not CopyResult.COPIED:
         return False
     local = logical_to_local(backup_root, entry.local_relative_path)
-    if not local.exists():
+    try:
+        local_size = local.stat().st_size
+    except OSError:
+        return False  # missing or unreadable -> re-copy
+    # A size mismatch (e.g. the file the interruption left half-written) is a
+    # definite mismatch: reject it without paying for a full re-hash first.
+    if entry.size is not None and local_size != entry.size:
         return False
     if entry.sha256:
         return hash_local(local) == entry.sha256

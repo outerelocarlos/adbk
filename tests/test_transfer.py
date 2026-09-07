@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from adbk import transfer
-from adbk.manifest import Manifest
+from adbk import paths, transfer
+from adbk.manifest import Manifest, ManifestEntry
 from adbk.models import (
     CopyResult,
     DeletionResult,
@@ -95,6 +95,47 @@ def test_prune_keeps_nonempty_source_dir() -> None:
     dcim = TreeNode("DCIM", "/storage/emulated/0/DCIM", EntryType.DIRECTORY)
     transfer.prune_source_dirs(device, dcim)
     assert device.exists("/storage/emulated/0/DCIM")
+
+
+def _copied_entry(backup_root: Path, logical: str, data: bytes) -> ManifestEntry:
+    """Write ``data`` at ``logical`` under ``backup_root`` and record it as copied."""
+
+    local = paths.logical_to_local(backup_root, logical)
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_bytes(data)
+    return ManifestEntry(
+        android_path="/storage/emulated/0/x",
+        local_relative_path=logical,
+        category="cat",
+        size=len(data),
+        sha256=transfer.hash_local(local),
+        copy_result=CopyResult.COPIED,
+    )
+
+
+def test_entry_satisfied_true_when_size_and_hash_match(tmp_path: Path) -> None:
+    entry = _copied_entry(tmp_path, "devices/S/shared-storage/a.txt", b"hello")
+    assert transfer.entry_satisfied(entry, tmp_path)
+
+
+def test_entry_satisfied_false_when_local_missing(tmp_path: Path) -> None:
+    entry = _copied_entry(tmp_path, "devices/S/shared-storage/a.txt", b"hello")
+    paths.logical_to_local(tmp_path, entry.local_relative_path).unlink()
+    assert not transfer.entry_satisfied(entry, tmp_path)
+
+
+def test_entry_satisfied_false_on_size_mismatch(tmp_path: Path) -> None:
+    # A half-written file (wrong size) is rejected on the cheap size check alone.
+    entry = _copied_entry(tmp_path, "devices/S/shared-storage/a.txt", b"hello")
+    paths.logical_to_local(tmp_path, entry.local_relative_path).write_bytes(b"hel")
+    assert not transfer.entry_satisfied(entry, tmp_path)
+
+
+def test_entry_satisfied_false_on_hash_mismatch(tmp_path: Path) -> None:
+    # Same size but different bytes: the full re-hash still catches it.
+    entry = _copied_entry(tmp_path, "devices/S/shared-storage/a.txt", b"hello")
+    paths.logical_to_local(tmp_path, entry.local_relative_path).write_bytes(b"world")
+    assert not transfer.entry_satisfied(entry, tmp_path)
 
 
 def test_is_excluded() -> None:
